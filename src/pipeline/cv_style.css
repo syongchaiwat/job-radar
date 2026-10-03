@@ -1,0 +1,142 @@
+/* CV print layout, measured from the hand-made Canva CV (A4, 2 pages).
+   Edit here to change the look: every size below is a deliberate rule. */
+
+@page {
+  size: A4;
+  margin: 14mm 11mm 14mm 11mm;   /* ~31pt left/right like the Canva version */
+}
+
+:root {
+  --text: #1a1a1a;
+  --muted: #444;
+  --rule: #333;
+  --body-size: 10pt;
+  --small-size: 8pt;
+  --heading-size: 13pt;
+  --name-size: 28pt;
+  --section-gap: 16pt;           /* space above each section heading */
+  --date-gutter: 56pt;           /* right gap for body text so the right-aligned dates stand out */
+  --entry-gap: 10pt;             /* space between entries in a section */
+  --bullet-indent: 17pt;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  color: var(--text);
+  font-family: "Roboto", "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--body-size);
+  line-height: 1.45;
+  -webkit-print-color-adjust: exact;
+}
+
+a { color: inherit; text-decoration: underline; }
+
+/* ---------- header ---------- */
+.cv-header {
+  display: flex;
+  align-items: center;
+  gap: 22pt;
+  margin: 0 0 6pt 10pt;
+}
+.photo {
+  width: 92pt;
+  height: 92pt;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: 50% 30%;
+  flex-shrink: 0;
+}
+h1 {
+  font-family: "Times New Roman", Times, serif;
+  font-weight: 400;
+  font-size: var(--name-size);
+  letter-spacing: 0.5pt;
+  margin: 0 0 6pt;
+  line-height: 1.1;
+}
+.contact-row {
+  font-size: 8.5pt;
+  line-height: 1.6;
+}
+.contact-row span + span { margin-left: 14pt; }
+.contact-row b { font-weight: 700; }
+
+/* ---------- sections ---------- */
+h2 {
+  font-family: "Times New Roman", Times, serif;
+  font-weight: 700;
+  font-size: var(--heading-size);
+  text-transform: uppercase;
+  letter-spacing: 0.3pt;
+  margin: var(--section-gap) 0 8pt;
+  padding-bottom: 3pt;
+  border-bottom: 0.75pt solid var(--rule);
+  break-after: avoid;
+}
+section p { margin: 0; }
+
+/* ---------- entries ---------- */
+/* Entries may split across pages; only titles stay attached to their first line. */
+.entry-head, .entry-group { break-after: avoid; }
+p, li { orphans: 2; widows: 2; }
+.entry + .entry { margin-top: var(--entry-gap); }
+
+.entry-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12pt;
+}
+.entry-title {
+  font-weight: 700;
+  letter-spacing: 0.6pt;
+}
+.projects .entry-title { font-style: italic; letter-spacing: 0; }
+.entry-head .meta { font-style: italic; }
+.entry-date {
+  margin-left: auto;
+  font-weight: 700;
+  letter-spacing: 0.6pt;
+  white-space: nowrap;
+}
+.entry-sub { line-height: 1.5; }
+.entry-small {
+  font-size: var(--small-size);
+  letter-spacing: 0.3pt;
+  color: var(--muted);
+}
+.entry-group {
+  font-weight: 700;
+  font-style: italic;
+  margin-top: 6pt;
+}
+
+/* ---------- bullets ---------- */
+ul {
+  margin: 3pt 0 0;
+  padding-left: var(--bullet-indent);
+}
+li { padding-left: 2pt; }
+li::marker { font-size: 8pt; }
+.education li { line-height: 1.35; }
+
+/* Bullet labels ("**Major:** ...", "**Survival Analysis:** ...") in bold for scanning */
+li > strong:first-child { font-weight: 700; }
+
+/* Everything except the summary stops short of the right margin, so dates stand out */
+section:not(.summary) ul,
+section:not(.summary) .entry-sub,
+section:not(.summary) .entry-group,
+section:not(.summary) > p { padding-right: var(--date-gutter); }
+
+/* ---------- fit-to-pages fallbacks (cv_pdf.py retries with these) ---------- */
+.density-1 { --section-gap: 11pt; --entry-gap: 7pt; line-height: 1.38; }
+.density-1 h2 { margin-bottom: 6pt; }
+.density-2 { --section-gap: 9pt; --entry-gap: 6pt; --body-size: 9.5pt; line-height: 1.33; }
+.density-2 h2 { margin-bottom: 5pt; }
+.density-2 .entry-sub { line-height: 1.4; }
+.density-3 { --section-gap: 8pt; --entry-gap: 5pt; --body-size: 9.5pt; line-height: 1.3; page: tight; }
+.density-3 h2 { margin-bottom: 5pt; }
+.density-3 .entry-sub { line-height: 1.35; }
+@page tight { margin: 10mm 11mm 9mm 11mm; }   /* last resort: shave the top/bottom margins */

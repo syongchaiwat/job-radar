@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Board · job-radar{% endblock %}
+{% block content %}
+<div x-data="board()" x-init="init()">
+  <script type="application/json" id="jobs-data">{{ jobs_json | safe }}</script>
+  <script type="application/json" id="board-config">{{ board_config | safe }}</script>
+
+  <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-4">
+    <div>
+      <h1 class="text-3xl font-bold">Board</h1>
+      <p class="text-gray-400 text-sm mt-1" x-text="subtitle()"></p>
+    </div>
+    <div class="flex items-center gap-2">
+      <input type="text" x-model="search" placeholder="Search company or title"
+             class="bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm w-full sm:w-56">
+      <button @click="showExcluded = !showExcluded"
+              :class="showExcluded ? 'border-accent text-accent' : 'border-gray-700 text-gray-300'"
+              class="border rounded px-3 py-1.5 text-sm whitespace-nowrap">
+        <span x-text="showExcluded ? 'Hide excluded' : 'Show excluded'"></span>
+      </button>
+    </div>
+  </div>
+
+  {% include "partials/_add_job.html" %}
+
+  <div class="flex flex-wrap items-center gap-2 mb-3">
+    <span class="text-xs uppercase tracking-wide text-gray-500 w-14">Show</span>
+    <template x-for="(label, key) in statusFilters" :key="key">
+      <button @click="statusFilter = key" :class="pillClass(statusFilter === key)"
+              class="border rounded-full px-3 py-1 text-sm" x-text="label"></button>
+    </template>
+  </div>
+  <div class="flex flex-wrap items-center gap-2 mb-3">
+    <span class="text-xs uppercase tracking-wide text-gray-500 w-14">Theme</span>
+    <button @click="activeTheme='all'" :class="pillClass(activeTheme === 'all')" class="border rounded-full px-3 py-1 text-sm">All</button>
+    {% for code, label in theme_pills %}
+    <button @click="activeTheme='{{ code }}'" :class="pillClass(activeTheme === '{{ code }}')" class="border rounded-full px-3 py-1 text-sm">{{ label }}</button>
+    {% endfor %}
+  </div>
+  <div class="flex flex-wrap items-center gap-2 mb-6">
+    <span class="text-xs uppercase tracking-wide text-gray-500 w-14">Sort</span>
+    <template x-for="(label, key) in sorts" :key="key">
+      <button @click="sort = key" :class="pillClass(sort === key)"
+              class="border rounded-full px-3 py-1 text-sm" x-text="label"></button>
+    </template>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for row in rows %}
+      {% include "partials/_card.html" %}
+    {% endfor %}
+  </div>
+  <p x-show="visible.length === 0" x-cloak class="text-sm text-gray-500 mt-2">No jobs match these filters.</p>
+</div>
+<script src="/static/js/board.js"></script>
+{% endblock %}

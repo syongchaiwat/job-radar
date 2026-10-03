@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Profile · job-radar{% endblock %}
+{% block content %}
+<h1 class="text-3xl font-bold mb-6">Profile</h1>
+
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2">
+  <div class="border border-gray-800 rounded-lg p-4">
+    <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Days to graduation</p>
+    <p class="text-3xl font-bold">{{ days_to_graduation }}</p>
+  </div>
+  <div class="border border-gray-800 rounded-lg p-4">
+    <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Days to L-permit deadline (Art. 21 FNIA)</p>
+    <p class="text-3xl font-bold">{{ days_to_permit_deadline }}</p>
+  </div>
+</div>
+<p class="text-sm text-gray-500 mb-8">6-month job-search permit clock starts at graduation. See constraints.md for the full picture.</p>
+
+{% for section in theme_sections %}
+<div class="border border-gray-800 rounded-lg p-4 mb-4">
+  <h2 class="text-xl font-semibold mb-2">
+    Theme {{ section.code }}: {{ section.name }}
+    <span class="text-sm text-gray-500 font-normal">({{ section.n_jobs }} screened jobs)</span>
+  </h2>
+
+  {% if section.top_gaps %}
+  <p class="text-sm text-gray-400 mb-3">
+    Most common gaps:
+    {% for term, n in section.top_gaps %}<span class="font-semibold text-gray-200">{{ term }}</span> ({{ n }}){% if not loop.last %}, {% endif %}{% endfor %}
+  </p>
+  {% else %}
+  <p class="text-sm text-gray-600 italic mb-3">No screened jobs in this theme yet.</p>
+  {% endif %}
+
+  {% if section.low_hanging_fruit_items %}
+  <details class="text-sm">
+    <summary class="cursor-pointer text-gray-400 hover:text-gray-200">Low-hanging fruit (from profile)</summary>
+    <ul class="list-disc list-inside mt-2 space-y-1 text-gray-300">
+      {% for item in section.low_hanging_fruit_items %}<li>{{ item }}</li>{% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

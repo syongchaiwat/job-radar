@@ -1,0 +1,68 @@
+{# "Add a job": POST /jobs/add. add_form carries the previous submission back
+   when it needs another step (blocked fetch -> paste description) or failed. #}
+<div class="border border-gray-800 rounded-lg p-4 mb-6" x-data="{ working: false }">
+  <p class="text-xs uppercase tracking-wide text-gray-500 mb-3">Add a job</p>
+
+  {% if added %}
+  <div class="border border-accent/50 rounded p-3 mb-3 text-sm flex flex-wrap items-center gap-2">
+    <span class="text-accent">Added:</span>
+    <span>{{ added.company }} — {{ added.title }}</span>
+    {% if added_row and added_row.screening %}
+    <span class="text-gray-400">· {{ added_row.screening.decision }} · {{ added_row.screening.theme | theme_label }} · {{ added_row.screening.match_level or "no match level" }}</span>
+    {% endif %}
+    <a href="/jobs/{{ added.id }}" class="ml-auto text-accent hover:underline">Open →</a>
+  </div>
+  {% endif %}
+
+  {% if add_form.duplicate %}
+  <div class="border border-amber-800 rounded p-3 mb-3 text-sm space-y-2">
+    <p>Already on the board:
+      <a href="/jobs/{{ add_form.duplicate.id }}" class="text-accent hover:underline">{{ add_form.duplicate.company }} — {{ add_form.duplicate.title or "(untitled)" }}</a>
+    </p>
+    {% if add_form.description %}
+    <p class="text-gray-400">If its saved description is wrong, replace it with the one you pasted below and re-screen:</p>
+    <button type="submit" form="add-job-form" formaction="/jobs/{{ add_form.duplicate.id }}/description"
+            @click="working = true" class="border border-amber-600 text-amber-300 rounded px-3 py-1 text-sm hover:bg-amber-900/30">
+      Replace description &amp; re-screen
+    </button>
+    {% else %}
+    <p class="text-gray-400">To fix its description, paste the text below and submit again, or use "Replace description" on the job page.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if add_form.error %}
+  <div class="border border-red-900 rounded p-3 mb-3 text-sm text-red-300">{{ add_form.error }}</div>
+  {% endif %}
+
+  <form id="add-job-form" method="post" action="/jobs/add" @submit="working = true" class="space-y-2">
+    <div class="flex flex-col sm:flex-row gap-2">
+      <input type="url" name="url" required value="{{ add_form.url or '' }}"
+             placeholder="Paste a job URL (LinkedIn, jobs.ch, company careers page...)"
+             class="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm">
+      <select name="force_theme" class="bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-gray-300"
+              title="Pin a theme: screening skips the classifier">
+        <option value="">Theme: auto</option>
+        {% for code, label in theme_pills %}
+        <option value="{{ code }}" {% if add_form.force_theme == code %}selected{% endif %}>Theme: {{ label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" :disabled="working"
+              class="border border-accent text-accent rounded px-4 py-1.5 text-sm whitespace-nowrap disabled:opacity-50">
+        <span x-show="!working">Add &amp; screen</span>
+        <span x-show="working" x-cloak class="animate-pulse">Fetching &amp; screening…</span>
+      </button>
+    </div>
+
+    {% if add_form.needs_description %}
+    <p class="text-sm text-amber-300">This site blocked auto-fetch. Paste the job description below and submit again.</p>
+    {% endif %}
+    <details {% if add_form.needs_description or add_form.description %}open{% endif %}>
+      <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300">Paste the description instead of auto-fetching</summary>
+      <textarea name="description" rows="8" placeholder="Job description text (title and company get extracted from it)"
+                class="w-full mt-2 bg-gray-900 border border-gray-700 rounded p-2 text-sm">{{ add_form.description or '' }}</textarea>
+    </details>
+    <p class="text-xs text-gray-500" x-show="!working">Fetches the posting, extracts it, then screens it on Claude (~10–20s).</p>
+    <p class="text-xs text-gray-500" x-show="working" x-cloak>Working, this takes ~10–20 seconds. Don't close the page.</p>
+  </form>
+</div>

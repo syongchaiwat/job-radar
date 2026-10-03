@@ -1,0 +1,20 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+*.egg-info/
+*.bak-*
+/cv_profile/
+/cv_drafts/
+.lavish/
+
+# Personal data: synced locally from PROFILE_SOURCE_DIR (or examples/), never committed
+/profile/
+/data/*.db
+/data/seed-jobs.md
+/data/seed_descriptions.json
+/evals/labeled_jobs.jsonl
+/evals/results/
+CLAUDE.local.md
+.claude/

@@ -1,0 +1,14 @@
+{% set gaps = screening.gaps | from_json %}
+{% if gaps %}
+<div class="border border-gray-800 rounded-lg p-4">
+  <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Gaps · extract_gaps</p>
+  <div class="space-y-2">
+    {% for g in gaps %}
+    <div class="flex items-start gap-2">
+      <span class="text-xs border border-gray-700 text-gray-400 rounded-full px-2 py-0.5 whitespace-nowrap mt-0.5">{{ g | gap_label }}</span>
+      <span class="text-sm text-gray-300">{{ g }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}

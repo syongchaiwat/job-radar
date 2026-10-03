@@ -1,0 +1,20 @@
+<div id="tracking-panel" class="border border-gray-800 rounded-lg p-4">
+  <p class="text-xs uppercase tracking-wide text-gray-500 mb-3">Tracking</p>
+  <form hx-post="/jobs/{{ job.id }}/tracking" hx-target="#tracking-panel" hx-swap="outerHTML"
+        x-data="{ selectedStatus: '{{ tracking.status }}' }">
+    <input type="hidden" name="status" x-model="selectedStatus">
+    <div class="flex flex-wrap gap-2 mb-3">
+      {% for opt in status_options %}
+      <button type="button" @click="selectedStatus = '{{ opt }}'"
+              :class="selectedStatus === '{{ opt }}' ? 'bg-accent/20 border-accent text-accent' : 'border-gray-700 text-gray-400'"
+              class="border rounded-full px-3 py-1 text-xs">{{ opt | status_label }}</button>
+      {% endfor %}
+    </div>
+    <textarea name="notes" rows="5" placeholder="Notes..."
+              class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm mb-3">{{ tracking.notes or "" }}</textarea>
+    <div class="flex items-center gap-3">
+      <button type="submit" class="border border-gray-700 rounded px-4 py-1.5 text-sm hover:border-gray-500">Save</button>
+      {% if saved %}<span class="text-xs text-green-400">Saved.</span>{% endif %}
+    </div>
+  </form>
+</div>

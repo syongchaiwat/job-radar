@@ -1,0 +1,62 @@
+<div class="space-y-4">
+  {% if screening.theme %}
+  <div class="border border-gray-800 rounded-lg p-4">
+    <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Theme · classify_theme</p>
+    <p class="text-lg font-semibold mb-1">{{ screening.theme | theme_label }} — {{ screening.theme | theme_name }}</p>
+    {% if screening.theme_rationale %}<p class="text-sm text-gray-400">{{ screening.theme_rationale }}</p>{% endif %}
+  </div>
+  {% endif %}
+
+  {% if screening.match_level %}
+  <div class="border border-gray-800 rounded-lg p-4" {% if screening.match_rationale %}x-data="{ open: false }"{% endif %}>
+    <div class="flex items-center justify-between mb-1">
+      <p class="text-xs uppercase tracking-wide text-gray-500">Match · score_match</p>
+      {% if screening.match_rationale %}
+      <button type="button" @click="open = !open" class="text-xs text-gray-500 hover:text-gray-300 underline">
+        <span x-show="!open">Show details</span><span x-show="open" x-cloak>Hide details</span>
+      </button>
+      {% endif %}
+    </div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="text-lg font-semibold capitalize">{{ screening.match_level }}</span>
+      <span class="text-xs border rounded-full px-2 py-0.5 {% if screening.match_level in ('strong','good') %}border-accent text-accent{% else %}border-gray-600 text-gray-400{% endif %}">
+        {{ 'High confidence' if screening.match_level in ('strong','good') else 'Lower confidence' }}
+      </span>
+      {% if screening.target_lane %}
+      <span class="text-xs border border-gray-700 text-gray-400 rounded-full px-2 py-0.5">{{ screening.target_lane }}</span>
+      {% endif %}
+    </div>
+    {% if screening.match_rationale %}
+    <p class="text-sm text-gray-400" x-show="open" x-cloak>{{ screening.match_rationale }}</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% set reasons = screening.filter_reasons | from_json %}
+  <div class="border border-gray-800 rounded-lg p-4" {% if reasons %}x-data="{ open: false }"{% endif %}>
+    <div class="flex items-center justify-between mb-1">
+      <p class="text-xs uppercase tracking-wide text-gray-500">Screening decision</p>
+      {% if reasons %}
+      <button type="button" @click="open = !open" class="text-xs text-gray-500 hover:text-gray-300 underline">
+        <span x-show="!open">Show details</span><span x-show="open" x-cloak>Hide details</span>
+      </button>
+      {% endif %}
+    </div>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="text-2xl font-bold capitalize">{{ screening.decision }}</span>
+      {% if screening.decision == 'keep' %}
+      <span class="text-xs border border-accent/50 text-accent rounded-full px-2 py-0.5">passed filter gate</span>
+      {% elif screening.decision == 'flag' %}
+      <span class="text-xs border border-amber-600 text-amber-300 rounded-full px-2 py-0.5">rule warning: see details</span>
+      {% endif %}
+    </div>
+    {% if reasons %}
+    <ul class="text-sm text-gray-400 space-y-1 list-disc list-inside" x-show="open" x-cloak>
+      {% for r in reasons %}<li>{{ r }}</li>{% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-gray-400">No exclusion/flag rules triggered.</p>
+    {% endif %}
+  </div>
+
+</div>

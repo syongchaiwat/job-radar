@@ -1,0 +1,26 @@
+{% if is_truncated %}
+<p class="text-xs text-amber-400 mb-3">⚠ Partial — source snippet is truncated, breakdown may be incomplete.</p>
+{% endif %}
+<p class="text-xs uppercase tracking-wide text-gray-500 mb-1">About the role</p>
+<p class="text-sm text-gray-300 mb-3">{{ breakdown.about_the_role }}</p>
+
+{% if breakdown.key_responsibilities %}
+<p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Key responsibilities</p>
+<ul class="text-sm text-gray-300 list-disc list-inside mb-3 space-y-1">
+  {% for item in breakdown.key_responsibilities %}<li>{{ item }}</li>{% endfor %}
+</ul>
+{% endif %}
+
+{% if breakdown.requirements_skills %}
+<p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Requirements & skills</p>
+<ul class="text-sm text-gray-300 list-disc list-inside mb-3 space-y-1">
+  {% for item in breakdown.requirements_skills %}<li>{{ item }}</li>{% endfor %}
+</ul>
+{% endif %}
+
+{% if breakdown.nice_to_have %}
+<p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Nice to have</p>
+<ul class="text-sm text-gray-300 list-disc list-inside space-y-1">
+  {% for item in breakdown.nice_to_have %}<li>{{ item }}</li>{% endfor %}
+</ul>
+{% endif %}

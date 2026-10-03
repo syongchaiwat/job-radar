@@ -1,0 +1,21 @@
+{# Review bar: the board's review queue is "status == new". Only sets tracking
+   status; Prepare CV lives in the CV section so shortlisting never spends credits. #}
+<form method="post" action="/jobs/{{ job.id }}/review"
+      class="border {% if tracking.status == 'new' %}border-accent/40{% else %}border-gray-800{% endif %} rounded-lg p-3 mb-6 flex flex-wrap items-center gap-3">
+  <span class="text-xs uppercase tracking-wide text-gray-500">Review</span>
+  {% if tracking.status == 'new' %}
+  <span class="text-xs bg-accent/20 text-accent rounded-full px-2 py-0.5">Needs review</span>
+  <button name="action" value="archive" class="border border-gray-600 text-gray-300 rounded px-3 py-1 text-sm hover:border-gray-400">Archive</button>
+  <button name="action" value="shortlist" class="border border-accent text-accent rounded px-3 py-1 text-sm hover:bg-accent/10">Shortlist</button>
+  {% else %}
+  <span class="text-sm">Reviewed · <span class="text-accent">{{ tracking.status | status_label }}</span></span>
+  {% if tracking.status != 'ignored' %}
+  <button name="action" value="archive" class="border border-gray-600 text-gray-300 rounded px-3 py-1 text-sm hover:border-gray-400">Archive</button>
+  {% endif %}
+  {% if tracking.status == 'ignored' %}
+  <button name="action" value="shortlist" class="border border-accent text-accent rounded px-3 py-1 text-sm hover:bg-accent/10">Shortlist</button>
+  {% endif %}
+  <button name="action" value="reset" class="text-xs text-gray-500 hover:text-gray-300 underline">Move back to review</button>
+  {% endif %}
+  <span class="text-xs text-gray-500 sm:ml-auto">Later stages (applied, offer…) are in Tracking below.</span>
+</form>

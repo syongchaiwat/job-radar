@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ job.company }} — {{ job.title }} · job-radar{% endblock %}
+{% block content %}
+<a href="/" class="text-sm text-gray-400 hover:text-gray-100">← Back to board</a>
+
+<div class="flex flex-col sm:flex-row sm:items-start sm:justify-between mt-4 mb-1 gap-3">
+  <div>
+    <p class="text-xs uppercase tracking-wide text-accent">{{ job.company }}</p>
+    <h1 class="text-3xl font-bold">{{ job.title }}</h1>
+  </div>
+  {% if screening and screening.match_level %}
+  <span class="self-start text-sm border rounded-full px-3 py-1 whitespace-nowrap {% if screening.match_level in ('strong','good') %}border-accent text-accent{% else %}border-gray-600 text-gray-400{% endif %}">
+    {{ screening.match_level | capitalize }} match
+  </span>
+  {% endif %}
+</div>
+<p class="text-gray-400 text-sm mb-4">{{ job | subtitle_line }}</p>
+
+{% include "partials/_review_bar.html" %}
+
+<div id="breakdown-section" hx-get="/jobs/{{ job.id }}/breakdown" hx-trigger="load" hx-swap="innerHTML"
+     class="border border-gray-800 rounded-lg p-4 mb-6">
+  <p class="text-sm text-gray-500 animate-pulse">Loading breakdown… (first view of this job can take up to a minute)</p>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-2">
+    {% if screening %}
+      {% include "partials/_screening_sections.html" %}
+    {% else %}
+      <p class="text-gray-500">Not screened yet.</p>
+    {% endif %}
+  </div>
+  <div class="space-y-4">
+    {% include "partials/_labels_panel.html" %}
+    {% include "partials/_tracking_panel.html" %}
+    <div class="border border-gray-800 rounded-lg p-4">
+      <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Source</p>
+      <p class="text-sm text-gray-400 break-all mb-3">{{ job.url }}</p>
+      <a href="{{ job.url }}" target="_blank" class="inline-block border border-gray-700 rounded px-4 py-1.5 text-sm hover:border-gray-500">Open posting</a>
+    </div>
+  </div>
+</div>
+
+<div class="mt-6">
+  {% include "partials/_cv_panel.html" %}
+</div>
+
+{% if screening %}
+<div class="mt-6">
+  {% include "partials/_gaps.html" %}
+</div>
+{% endif %}
+
+<div class="mt-6 border border-gray-800 rounded-lg p-4">
+  <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Full description</p>
+  <pre class="text-sm text-gray-400 whitespace-pre-wrap font-sans">{{ job.description or "(no description)" }}</pre>
+  <details class="mt-4 border-t border-gray-800 pt-3">
+    <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300">Wrong description? Replace it and re-screen</summary>
+    <form method="post" action="/jobs/{{ job.id }}/description" x-data="{ working: false }" @submit="working = true" class="mt-2 space-y-2">
+      <textarea name="description" rows="10" required placeholder="Paste the real job description"
+                class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm"></textarea>
+      <button type="submit" :disabled="working" class="border border-gray-700 rounded px-4 py-1.5 text-sm hover:border-gray-500 disabled:opacity-50">
+        <span x-show="!working">Replace &amp; re-screen</span><span x-show="working" x-cloak class="animate-pulse">Re-screening… (~10–20s)</span>
+      </button>
+      <p class="text-xs text-gray-500">Missing title/company get re-extracted from the new text. Your labels, tracking and CVs are kept.</p>
+    </form>
+  </details>
+</div>
+{% endblock %}
