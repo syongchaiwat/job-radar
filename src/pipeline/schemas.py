@@ -195,3 +195,54 @@ class PipelineState(BaseModel):
     # observability -- Annotated with operator.add so each node's returned
     # list gets appended to, not overwritten (this is the LangGraph reducer pattern)
     node_logs: Annotated[list[NodeLog], operator.add] = Field(default_factory=list)
+
+
+# --- Role cards (pipeline revamp, Phase 1) -----------------------------------
+
+SkillCategory = Literal[
+    "programming_language", "ml_method", "statistics", "ml_framework", "llm_genai",
+    "data_engineering", "database", "cloud_platform", "mlops_devops", "visualization_bi",
+    "software_engineering", "domain_knowledge", "methodology", "other",
+]
+
+
+class ExtractedSkill(BaseModel):
+    name: str = Field(
+        description="Canonical skill name in English. If the concept is already in the known-skills list, copy that "
+        "exact name; otherwise a short, conventional name (e.g. 'PyTorch', 'LLM', 'A/B testing', 'Kubernetes')."
+    )
+    category: SkillCategory
+    importance: Literal["required", "nice_to_have"]
+    raw_term: str = Field(description="The term as it appears in the posting (any language).")
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def _unknown_category_is_other(cls, v):
+        return v if v in SkillCategory.__args__ else "other"
+
+
+class LaneSignals(BaseModel):
+    employment_type: Literal[
+        "working_student", "internship", "thesis", "full_time", "part_time", "contract", "unclear"
+    ]
+    duration_months: Optional[int] = Field(default=None, description="Stated duration in months, if any.")
+    workload_min_pct: Optional[int] = Field(default=None, description="Lower bound of stated workload in percent, e.g. 40 for '40-60%'.")
+    workload_max_pct: Optional[int] = Field(default=None, description="Upper bound of stated workload in percent.")
+    start_date: Optional[str] = Field(default=None, description="Stated start date or period as written, e.g. 'January 2027', 'asap'.")
+    mentions_thesis: bool = Field(description="True if the posting mentions writing a thesis with the company.")
+
+
+class RoleCardExtraction(BaseModel):
+    title_normalized: str = Field(description="Job title in English without company name, gender markers or workload, e.g. 'Machine Learning Engineer'.")
+    summary: str = Field(description="2-3 English sentences on what the role actually does day to day, without company marketing.")
+    responsibilities: list[str] = Field(description="3-6 short English phrases, the core responsibilities.")
+    skills: list[ExtractedSkill] = Field(description="Specific skills, tools and methods asked for. Not soft skills like 'team player'.")
+    domain: str = Field(description="Industry or business domain in a few English words, e.g. 'payments fintech', 'reinsurance'.")
+    level: Literal["intern", "student", "junior", "mid", "senior", "lead", "unspecified"]
+    languages_required: list[str] = Field(default_factory=list, description="Spoken languages with level as stated, e.g. 'German (fluent)', 'English (C1)'.")
+    lane_signals: LaneSignals
+    information_quality: Literal["rich", "partial", "thin"] = Field(
+        description="rich = detailed responsibilities and requirements; partial = some detail; thin = a short or vague posting."
+    )
+
+    _coerce_resp = field_validator("responsibilities", "languages_required", mode="before")(_coerce_str_list)

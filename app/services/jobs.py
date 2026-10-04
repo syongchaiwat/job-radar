@@ -7,7 +7,7 @@ duplicate/stale cards the moment a job gets re-screened.
 """
 from sqlmodel import Session, select
 
-from src.db import CVDraft, GroundTruth, Job, Screening, Tracking
+from src.db import CVDraft, GroundTruth, Job, JobSkill, RoleCard, Screening, Skill, Tracking
 
 
 def _ensure_tracking(session: Session, job_id: str) -> Tracking:
@@ -80,4 +80,16 @@ def get_job_bundle(session: Session, job_id: str) -> dict | None:
         "cv_draft": cv_versions[-1] if cv_versions else None,
         "cv_versions": cv_versions,  # oldest first, so v1 = index 0
         "label": session.get(GroundTruth, job_id),
+        "role_card": session.get(RoleCard, job_id),
+        "role_card_skills": _skills_for(session, job_id),
     }
+
+
+def _skills_for(session: Session, job_id: str) -> dict[str, list[Skill]]:
+    rows = session.exec(
+        select(JobSkill, Skill).where(JobSkill.job_id == job_id, JobSkill.skill_id == Skill.id).order_by(Skill.name)
+    ).all()
+    out: dict[str, list[Skill]] = {"required": [], "nice_to_have": []}
+    for link, skill in rows:
+        out.setdefault(link.importance, []).append(skill)
+    return out

@@ -1,8 +1,8 @@
-"""Board page: GET /, POST /jobs/add"""
+"""Board page: GET /, POST /jobs/add, POST /jobs/market-data"""
 import json
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlmodel import Session
 
 from app.constants import ARCHIVED_STATUSES, IN_PROGRESS_STATUSES, MATCH_LEVELS, STATUS_OPTIONS, THEME_LABELS
@@ -10,6 +10,7 @@ from app.deps import get_session
 from app.services.jobs import list_board_rows
 from app.templating import templates
 from src.db import Job
+from src.enrich import enrich_job
 from src.ingest.dedupe import is_duplicate, job_id as url_job_id
 from src.ingest.manual import build_job, create_manual_job
 from src.ingest.url_fetch import fetch_and_extract
@@ -33,6 +34,7 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
                 "first_seen": row["job"].first_seen.isoformat(),
                 "match_level": row["screening"].match_level if row["screening"] else None,
                 "cv_verdict": row["cv_draft"].verdict if row["cv_draft"] else None,
+                "market_data": bool(row["job"].market_data),
             }
             for row in rows
         ]
@@ -109,4 +111,25 @@ def add_job(
             request, session, add_form={"error": f"Added the job, but screening failed: {exc}"}
         )
 
+    try:  # role card + skills + embedding; a failure here never blocks adding the job
+        enrich_job(session, job)
+        session.commit()
+    except Exception:
+        session.rollback()
+
     return RedirectResponse(f"/?added={job.id}", status_code=303)
+
+
+@router.post("/jobs/market-data")
+def set_market_data(session: Session = Depends(get_session), job_ids: list[str] = Form(...), value: str = Form(...)):
+    """Market-data switch for one or many jobs (board card toggle and bulk select)."""
+    flag = value == "1"
+    updated = 0
+    for jid in job_ids:
+        job = session.get(Job, jid)
+        if job is not None:
+            job.market_data = flag
+            session.add(job)
+            updated += 1
+    session.commit()
+    return JSONResponse({"updated": updated, "market_data": flag})

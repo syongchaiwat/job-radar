@@ -45,6 +45,23 @@
     </template>
   </div>
 
+  <div class="flex flex-wrap items-center gap-2 mb-6 -mt-3">
+    <span class="text-xs uppercase tracking-wide text-gray-500 w-14">Market</span>
+    <template x-for="(label, key) in marketFilters" :key="key">
+      <button @click="marketFilter = key" :class="pillClass(marketFilter === key)"
+              class="border rounded-full px-3 py-1 text-sm" x-text="label"></button>
+    </template>
+    <span class="text-xs text-gray-500" x-text="marketCount() + ' marked'"></span>
+    <button x-show="!selecting" @click="selecting = true" class="ml-auto border border-gray-700 rounded px-3 py-1 text-sm text-gray-300 hover:border-gray-500">Select jobs</button>
+    <div x-show="selecting" x-cloak class="ml-auto flex flex-wrap items-center gap-2 text-sm">
+      <span class="text-accent" x-text="selected.length + ' selected'"></span>
+      <button @click="selectVisible()" class="border border-gray-700 rounded px-3 py-1 hover:border-gray-500">Select all shown</button>
+      <button @click="bulkMarket(true)" :disabled="!selected.length" class="border border-accent text-accent rounded px-3 py-1 disabled:opacity-40">Mark as market data</button>
+      <button @click="bulkMarket(false)" :disabled="!selected.length" class="border border-gray-700 rounded px-3 py-1 disabled:opacity-40">Unmark</button>
+      <button @click="stopSelecting()" class="text-gray-400 hover:text-gray-200 underline">Done</button>
+    </div>
+  </div>
+
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
     {% for row in rows %}
       {% include "partials/_card.html" %}

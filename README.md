@@ -74,6 +74,12 @@ python scripts/add_manual_job.py "<url>" --force-theme 1                  # pin 
 python -m src.pipeline.run --all
 ```
 
+**Role cards and market data** (pipeline revamp, Phase 1): every job gets a role card, a normalized English summary with canonical skills and an embedding, used for archetypes and market stats. Jobs added from the board get one automatically; for everything else:
+```bash
+python scripts/enrich_jobs.py --missing       # role cards + skills + embeddings for jobs that lack them
+```
+Mark postings worth learning from as **market data** (◇ on each card, or **Select jobs** for bulk), independent of whether you apply. New skill names land as *pending* on the **Skills** page: approve them, or merge duplicates so they become aliases.
+
 **Review and correct:** on a job's page, **Archive** or **Shortlist**; **Your labels** records your theme and match (a different theme pins it and re-screens). A wrong description can be replaced and re-screened from the same page.
 
 **Generate a CV:** **Prepare CV** on the job page, or `python -m src.pipeline.cv_run --job-id <id>` (`--regenerate` revises the latest draft). Drafts land in `cv_drafts/` with the verdict, rubric scores, feedback and unresolved gaps. When a gap is something the candidate really has, add it to the profile source, sync, and regenerate. Always read a generated CV before sending it.
@@ -100,6 +106,48 @@ ingest: Adzuna + SerpApi + JSearch + manual (URL auto-fetch), dedupe by URL hash
 `python evals/run_eval.py` re-screens every job in the ground-truth table and scores it; `--fast` scores existing screenings. With the example profile this runs on the six fictional seed jobs.
 
 On the author's private set of 24 hand-labeled postings: **75% theme accuracy** and **85% match-level agreement within one grade**. Of the theme misses, half were jobs correctly removed by a filter rule before classification, not classifier errors.
+
+## Roadmap: pipeline revamp (planned)
+
+Not built yet. Design under review in [`docs/pipeline-revamp.md`](docs/pipeline-revamp.md): instead of screening against fixed themes and generating one CV per job, the pipeline learns *archetypes* (kinds of work) from postings marked as market data, and reuses one CV per archetype.
+
+**Four layers instead of one per-job chain**
+
+```mermaid
+flowchart TB
+    store["1 · Job store<br/>role card, skills, embedding,<br/>status, market-data switch"]
+    market["2 · Market layer<br/>archetypes shared across lanes<br/>demand, strengths, gaps"]
+    decide["3 · Decisions<br/>lane, eligibility<br/>fit x lane value x urgency"]
+    cvlib["CV library<br/>one CV per archetype + lane slots"]
+    letters["Cover letters<br/>one per job"]
+    store --> market
+    store --> decide
+    market --> cvlib
+    decide --> letters
+    cvlib --> letters
+```
+
+**Assigning a new job to an existing archetype: embeddings first, LLM only when unsure**
+
+```mermaid
+flowchart LR
+    card["Role card<br/>+ embedding + skills"] --> score["Score each archetype<br/>1. centroid similarity<br/>2. nearest neighbors<br/>3. skill overlap"]
+    score --> gate{"clear<br/>winner?"}
+    gate -- yes --> direct["Assign directly<br/>no tokens, instant"]
+    gate -- "no / close / thin" --> llm["LLM judges top 3<br/>archetype or none,<br/>reason, confidence"]
+```
+
+**Reworking the archetypes (manual, on demand): two independent tracks, reconciled, then human review**
+
+```mermaid
+flowchart LR
+    pool["Market-data jobs<br/>refresh outdated role cards"] --> t1["Track 1 · structure from data<br/>UMAP + HDBSCAN,<br/>keep stable clusters"]
+    pool --> t2["Track 2 · LLM taxonomy<br/>propose, refine,<br/>label every job"]
+    t1 --> rec["Reconcile<br/>final archetypes,<br/>merge / split / retire"]
+    t2 --> rec
+    rec --> check["Consistency check<br/>re-assign every job"]
+    check --> review["Human review + confirm<br/>versioned set, CVs flagged outdated"]
+```
 
 ## Build log
 

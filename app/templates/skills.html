@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Skills · job-radar{% endblock %}
+{% block content %}
+<div x-data="{ selected: [], names: {}, toggle(id, name, on) { if (on) { if (!this.selected.includes(id)) this.selected.push(id); this.names[id] = name; } else { this.selected = this.selected.filter(x => x !== id); } } }">
+  <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-4">
+    <div>
+      <h1 class="text-3xl font-bold">Skill dictionary</h1>
+      <p class="text-gray-400 text-sm mt-1">{{ n_pending }} pending review · {{ n_approved }} approved. Market stats count canonical skills, so duplicates here make them noisy.</p>
+    </div>
+    <div class="flex gap-2 text-sm">
+      {% for key, label in [('pending', 'Pending'), ('approved', 'Approved'), ('all', 'All')] %}
+      <a href="/skills?status={{ key }}" class="border rounded-full px-3 py-1 {% if status == key %}bg-accent/20 border-accent text-accent{% else %}border-gray-700 text-gray-400 hover:border-gray-500{% endif %}">{{ label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="border border-gray-800 rounded-lg p-3 mb-4 text-sm text-gray-400 space-y-1">
+    <p><b class="text-gray-200">Approve</b> skills that are fine as they are. <b class="text-gray-200">Merge</b> duplicates ("LLMs", "Large Language Models" → LLM): job links move over and the merged names become aliases, so future postings map straight to the kept skill. <b class="text-gray-200">Edit</b> a row to rename or recategorize; renaming onto an existing skill merges into it.</p>
+  </div>
+
+  <form method="post" class="space-y-3">
+    <input type="hidden" name="status" value="{{ status }}">
+    <div class="flex flex-wrap items-center gap-2 text-sm sticky top-0 bg-gray-950 py-2 z-10">
+      <span class="text-accent" x-text="selected.length + ' selected'"></span>
+      <button formaction="/skills/approve" :disabled="!selected.length" class="border border-accent text-accent rounded px-3 py-1 disabled:opacity-40">Approve selected</button>
+      <span class="text-gray-500">or merge into</span>
+      <select name="target_id" class="bg-gray-900 border border-gray-700 rounded px-2 py-1" :disabled="selected.length < 2">
+        <template x-for="id in selected" :key="id"><option :value="id" x-text="names[id]"></option></template>
+      </select>
+      <button formaction="/skills/merge" :disabled="selected.length < 2" class="border border-gray-700 rounded px-3 py-1 disabled:opacity-40">Merge</button>
+    </div>
+
+    <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead><tr class="text-left text-xs uppercase tracking-wide text-gray-500 border-b border-gray-800">
+        <th class="py-2 pr-2"><input type="checkbox" title="Select all on this page" style="accent-color:#a78bfa" @change="document.querySelectorAll('input[name=skill_ids]').forEach(b => { if (b.checked !== $el.checked) b.click(); })"></th><th class="py-2 pr-3">Skill</th><th class="py-2 pr-3">Category</th><th class="py-2 pr-3">Jobs (req / nice)</th><th class="py-2 pr-3">As written in postings</th><th class="py-2"></th>
+      </tr></thead>
+      {% for r in rows %}
+      {% set s = r.skill %}
+      <tbody x-data="{ edit: false }">
+      <tr class="border-b border-gray-900 align-top">
+        <td class="py-2 pr-2"><input type="checkbox" name="skill_ids" value="{{ s.id }}" data-name="{{ s.name }}" style="accent-color:#a78bfa" @change="toggle({{ s.id }}, $el.dataset.name, $el.checked)"></td>
+        <td class="py-2 pr-3">
+          <span class="{% if s.status == 'approved' %}text-accent{% else %}text-gray-100{% endif %}">{{ s.name }}</span>
+          {% if s.status == 'pending' %}<span class="text-xs text-gray-500"> · pending</span>{% endif %}
+          {% if r.aliases %}<p class="text-xs text-gray-600">aliases: {{ r.aliases | join(', ') }}</p>{% endif %}
+        </td>
+        <td class="py-2 pr-3 text-gray-400">{{ s.category | replace('_', ' ') }}</td>
+        <td class="py-2 pr-3 text-gray-300">{{ r.required + r.nice }} <span class="text-gray-500">({{ r.required }} / {{ r.nice }})</span></td>
+        <td class="py-2 pr-3 text-xs text-gray-500">{{ r.raw_terms | join(' · ') }}</td>
+        <td class="py-2 text-right"><button type="button" @click="edit = !edit" class="text-xs text-gray-400 hover:text-gray-200 underline">Edit</button></td>
+      </tr>
+      <tr x-show="edit" x-cloak class="border-b border-gray-900">
+        <td></td>
+        <td colspan="5" class="py-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <input form="edit-{{ s.id }}" name="name" value="{{ s.name }}" class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm">
+            <select form="edit-{{ s.id }}" name="category" class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm">
+              {% for c in categories %}<option value="{{ c }}" {% if c == s.category %}selected{% endif %}>{{ c | replace('_', ' ') }}</option>{% endfor %}
+            </select>
+            <button form="edit-{{ s.id }}" class="border border-accent text-accent rounded px-3 py-1 text-sm">Save</button>
+          </div>
+        </td>
+      </tr>
+      </tbody>
+      {% else %}
+      <tbody><tr><td colspan="6" class="py-6 text-gray-500">Nothing here. {% if status == 'pending' %}All skills are reviewed.{% endif %}</td></tr></tbody>
+      {% endfor %}
+    </table>
+    </div>
+  </form>
+  {% for r in rows %}
+  <form id="edit-{{ r.skill.id }}" method="post" action="/skills/{{ r.skill.id }}/edit"><input type="hidden" name="status" value="{{ status }}"></form>
+  {% endfor %}
+</div>
+{% endblock %}

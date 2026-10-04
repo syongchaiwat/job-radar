@@ -17,6 +17,7 @@
 <p class="text-gray-400 text-sm mb-4">{{ job | subtitle_line }}</p>
 
 {% include "partials/_review_bar.html" %}
+{% include "partials/_role_card.html" %}
 
 <div id="breakdown-section" hx-get="/jobs/{{ job.id }}/breakdown" hx-trigger="load" hx-swap="innerHTML"
      class="border border-gray-800 rounded-lg p-4 mb-6">

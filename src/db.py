@@ -31,6 +31,7 @@ class Job(SQLModel, table=True):
     forced_theme: Optional[str] = None  # user override: screening skips classify_theme and uses this instead
     description_breakdown: Optional[str] = None  # JSON-encoded DescriptionBreakdown, computed lazily on first Job Detail view
     description_breakdown_computed_at: Optional[datetime] = None
+    market_data: bool = False  # user switch: this posting shapes archetypes and market stats (independent of application status)
 
 
 class GroundTruth(SQLModel, table=True):
@@ -105,6 +106,64 @@ class CVDraft(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+class RoleCard(SQLModel, table=True):
+    """Normalized English summary of a posting: what every comparison (archetype
+    assignment, clustering, market stats) runs on instead of the raw text.
+    prompt_version + model let a rework refresh only outdated cards."""
+
+    job_id: str = Field(primary_key=True, foreign_key="job.id")
+    prompt_version: str
+    model: str
+    title_normalized: str
+    summary: str
+    responsibilities: str = "[]"  # JSON list[str]
+    domain: Optional[str] = None
+    level: str = "unspecified"
+    languages_required: str = "[]"  # JSON list[str]
+    lane_signals: str = "{}"  # JSON LaneSignals (raw; lanes themselves come later)
+    information_quality: str = "partial"  # rich | partial | thin
+    language_ok: bool = True  # False if the card doesn't read as English
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class Skill(SQLModel, table=True):
+    """Canonical skill in the skill dictionary. New names proposed during
+    extraction start as 'pending' until approved (or merged into another)."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True)
+    category: str = "other"
+    status: str = "pending"  # pending | approved
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class SkillAlias(SQLModel, table=True):
+    """Alternative spelling -> canonical skill (e.g. 'large language models' -> LLM).
+    Stored lowercase; merging skills turns the merged name into an alias."""
+
+    alias: str = Field(primary_key=True)
+    skill_id: int = Field(foreign_key="skill.id")
+
+
+class JobSkill(SQLModel, table=True):
+    job_id: str = Field(primary_key=True, foreign_key="job.id")
+    skill_id: int = Field(primary_key=True, foreign_key="skill.id")
+    importance: str = "required"  # required | nice_to_have
+    raw_term: Optional[str] = None
+
+
+class Embedding(SQLModel, table=True):
+    """Dense vector of a job's role card. Recomputed only when the card text
+    (role_card_hash) or the embedding model changes."""
+
+    job_id: str = Field(primary_key=True, foreign_key="job.id")
+    model: str
+    role_card_hash: str
+    dim: int
+    vector: bytes  # float32, L2-normalized
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
 def get_engine(db_path: Optional[str] = None):
     path = Path(db_path or os.environ.get("DATABASE_PATH", DEFAULT_DB_PATH))
     if not path.is_absolute():
@@ -117,9 +176,34 @@ def get_engine(db_path: Optional[str] = None):
     return create_engine(f"sqlite:///{path}")
 
 
+# Columns added to existing tables after they were first created. create_all()
+# only creates missing tables, so older databases get these via ALTER TABLE.
+_ADDED_COLUMNS = {
+    "job": {
+        "forced_theme": "VARCHAR",
+        "market_data": "BOOLEAN NOT NULL DEFAULT 0",
+    },
+}
+
+
+def _migrate(engine) -> None:
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    with engine.begin() as conn:
+        for table, columns in _ADDED_COLUMNS.items():
+            if not inspector.has_table(table):
+                continue
+            existing = {c["name"] for c in inspector.get_columns(table)}
+            for name, ddl in columns.items():
+                if name not in existing:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+
+
 def init_db(engine=None):
     engine = engine or get_engine()
     SQLModel.metadata.create_all(engine)
+    _migrate(engine)
     return engine
 
 

@@ -1,0 +1,39 @@
+{# Role card (pipeline revamp Phase 1): the normalized summary every comparison runs on. #}
+{% if role_card %}
+{% set signals = role_card.lane_signals | from_json %}
+<details class="border border-gray-800 rounded-lg p-4 mb-6">
+  <summary class="cursor-pointer flex flex-wrap items-center gap-2">
+    <span class="text-xs uppercase tracking-wide text-gray-500">Role card</span>
+    <span class="text-sm font-semibold">{{ role_card.title_normalized }}</span>
+    <span class="text-xs border border-gray-700 text-gray-400 rounded-full px-2 py-0.5">{{ role_card.level }}</span>
+    <span class="text-xs border rounded-full px-2 py-0.5 {% if role_card.information_quality == 'rich' %}border-accent/50 text-accent{% elif role_card.information_quality == 'thin' %}border-amber-600 text-amber-300{% else %}border-gray-700 text-gray-400{% endif %}">{{ role_card.information_quality }} posting</span>
+    {% if not role_card.language_ok %}<span class="text-xs border border-amber-600 text-amber-300 rounded-full px-2 py-0.5">not English: re-extract</span>{% endif %}
+    <span class="text-xs text-gray-500 ml-auto">{{ role_card.model }} · prompt {{ role_card.prompt_version }}</span>
+  </summary>
+  <div class="mt-3 space-y-3 text-sm">
+    <p class="text-gray-300">{{ role_card.summary }}</p>
+    <ul class="list-disc list-inside text-gray-400 space-y-0.5">
+      {% for r in role_card.responsibilities | from_json %}<li>{{ r }}</li>{% endfor %}
+    </ul>
+    <div class="flex flex-wrap gap-2 items-center">
+      <span class="text-xs text-gray-500 w-24">Required</span>
+      {% for sk in role_card_skills.required %}<span class="text-xs border rounded-full px-2 py-0.5 {% if sk.status == 'approved' %}border-accent/50 text-accent{% else %}border-gray-600 text-gray-300{% endif %}" title="{{ sk.category }}{% if sk.status != 'approved' %} · pending review{% endif %}">{{ sk.name }}</span>{% endfor %}
+    </div>
+    {% if role_card_skills.nice_to_have %}
+    <div class="flex flex-wrap gap-2 items-center">
+      <span class="text-xs text-gray-500 w-24">Nice to have</span>
+      {% for sk in role_card_skills.nice_to_have %}<span class="text-xs border rounded-full px-2 py-0.5 {% if sk.status == 'approved' %}border-accent/30 text-accent/80{% else %}border-gray-700 text-gray-400{% endif %}" title="{{ sk.category }}">{{ sk.name }}</span>{% endfor %}
+    </div>
+    {% endif %}
+    <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-400">
+      {% if role_card.domain %}<span><span class="text-gray-500">Domain:</span> {{ role_card.domain }}</span>{% endif %}
+      {% set langs = role_card.languages_required | from_json %}
+      {% if langs %}<span><span class="text-gray-500">Languages:</span> {{ langs | join(', ') }}</span>{% endif %}
+      <span><span class="text-gray-500">Type:</span> {{ (signals.employment_type or 'unclear') | replace('_', ' ') }}{% if signals.duration_months %}, {{ signals.duration_months }} months{% endif %}{% if signals.workload_min_pct %}, {{ signals.workload_min_pct }}{% if signals.workload_max_pct and signals.workload_max_pct != signals.workload_min_pct %}-{{ signals.workload_max_pct }}{% endif %}%{% endif %}{% if signals.start_date %}, start {{ signals.start_date }}{% endif %}{% if signals.mentions_thesis %}, thesis possible{% endif %}</span>
+    </div>
+    <p class="text-xs text-gray-600">Skills in violet are approved in the skill dictionary; grey ones await review on the <a href="/skills" class="underline">Skills page</a>.</p>
+  </div>
+</details>
+{% else %}
+<p class="text-xs text-gray-600 mb-6">No role card yet: <code>python scripts/enrich_jobs.py --job-id {{ job.id }}</code></p>
+{% endif %}

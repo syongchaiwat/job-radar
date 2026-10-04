@@ -26,15 +26,6 @@ from src.pipeline.schemas import (
 # contains Senior/Staff/..." for jobs whose titles plainly didn't (e.g.
 # "AI Scientist, LLM Systems", "Founding AI Engineer"), and once
 # extending the rule to a word ("Manager") that was never in it.
-BANNED_TITLE_WORDS = ["senior", "staff", "principal", "lead", "head of", "director"]
-
-
-def _title_rule_match(title: str) -> str | None:
-    title_lower = title.lower()
-    for word in BANNED_TITLE_WORDS:
-        if word in title_lower:
-            return word
-    return None
 
 
 def normalize_node(state: PipelineState) -> dict:
@@ -77,15 +68,9 @@ def generate_blurb_node(state: PipelineState) -> dict:
 
 
 def filter_gate_node(state: PipelineState) -> dict:
-    matched_word = _title_rule_match(state.title)
-    if matched_word:
-        reason = (
-            f'Title contains "{matched_word.title()}" (checked deterministically -- '
-            'matches the "Titles containing Senior, Staff, Principal, Lead, Head of, '
-            'Director" exclude rule).'
-        )
-        return _soften_for_manual(state, {"decision": "exclude", "filter_reasons": [reason], "node_logs": []})
-
+    # No title-word rule: seniority words in a title ("Senior", "Lead", "Staff")
+    # say little on their own, so seniority is judged from the requirements
+    # (e.g. years of experience in filters.md) and in match scoring instead.
     prompt = _load_prompt("filter_gate").format(
         filters=pc.load_filters(),
         job_title=state.title,

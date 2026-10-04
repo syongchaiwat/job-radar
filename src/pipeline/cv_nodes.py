@@ -120,7 +120,7 @@ def critique_cv_node(state: CVDraftState) -> dict:
     )
     parsed, log = _call("critique", prompt, CVCritique, provider="anthropic")
 
-    # Deterministic backstop, mirroring nodes.py's BANNED_TITLE_WORDS pattern:
+    # Deterministic backstop:
     # don't fully trust the LLM's own verdict against its own scores, since
     # a model's verdict can disagree with its own scores.
     # Second backstop, the other direction: the critique has twice accused an

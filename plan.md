@@ -122,6 +122,17 @@ First build was Streamlit (Board table + widget-based Job Detail + Profile), ver
 
 **Manual jobs: rules warn, don't exclude — 30 Sep 2026.** Every "no theme" card on the board turned out to be a filter-gate exclusion (the graph stops before `classify_theme`), not a classifier "none". For hand-added jobs that trade-off is wrong, so `PipelineState.manual` (set from `job.source == "manual"`) makes `filter_gate_node` downgrade exclude -> flag, keeping the rule as the first reason. Bulk sources keep the short-circuit. Re-screened the two affected jobs: both now have theme + match. Plan from here: keep adding manual jobs and labeling disagreements, then re-cluster all manual jobs into a revised theme set (expect a theme/eval migration).
 
+**Pipeline revamp — Phase 1 (foundation) — Oct 2026.** Design: [`docs/pipeline-revamp.md`](docs/pipeline-revamp.md). Built:
+- `RoleCard`, `Skill`, `SkillAlias`, `JobSkill`, `Embedding` tables and `Job.market_data`; `init_db()` now applies added columns to existing databases (`_migrate`).
+- `src/enrich/`: role-card extraction on Sonnet (English enforced, German-word check flags slips), skill canonicalization (alias → canonical name → new *pending* skill; the known-skills list is passed to the model so it reuses names), local `bge-large-en-v1.5` embeddings keyed by card hash + model. Each step skips work that's already current (`ROLE_CARD_PROMPT_VERSION`).
+- `scripts/enrich_jobs.py --missing` backfill; jobs added from the board are enriched automatically.
+- UI: market-data toggle on cards, job page and in bulk (Select jobs), market filter; collapsible role card on Job Detail; Skills page (approve, merge into alias, rename/recategorize).
+- Hardening: role cards use native structured outputs (`method="json_schema"`): with tool calling, 2 of 140 long postings came back with the skills list as plain text. An unknown skill category coerces to "other"; `llm_call.call` raises a clear error when structured output fails validation instead of returning None; extraction retries once; an empty job title is filled from the role card.
+- Backfill result: all 140 jobs have role cards and embeddings (33 rich, 22 partial, 83 thin, mostly the 500-character Adzuna snippets), none flagged non-English, 145 skills pending review.
+- **Title rule removed:** no more filtering on title words (Senior, Lead, Staff…): the hard-coded `BANNED_TITLE_WORDS` check and the matching line in `filters.md` are gone. Seniority is judged from the requirements (e.g. "5+ years" flags) and in match scoring. It had also misfired on "Member of Technical Staff" (matched "staff"). Re-screened the 6 affected jobs; eval theme accuracy 18/24 → 19/24, match within-1 11/13 → 12/14.
+- **Adzuna jobs deleted:** the 82 API jobs (all archived, 80 with thin role cards, no CVs/labels/notes) and 10 skills only they used. Backup: `data/job_radar.db.bak-pre-delete-adzuna`. 58 jobs remain (34 manual, 24 seed).
+**Next:** flag the existing jobs as market data, review pending skills, then Phase 2 (archetypes, tested on example/synthetic jobs until the flagging is done).
+
 ### Phase 5: automation (half a day)
 - GitHub Actions: cron 06:00 Europe/Zurich (cron is UTC: `0 4 * * *` summer / `0 5 * * *` winter, or just pick one), runs ingest + pipeline, commits SQLite + log.
 - Secrets: ANTHROPIC_API_KEY, ADZUNA_APP_ID/KEY, RAPIDAPI_KEY.

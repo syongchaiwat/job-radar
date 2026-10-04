@@ -10,6 +10,12 @@ const SORTS = {
   cv: "CV verdict",
 };
 
+const MARKET_FILTERS = {
+  all: "All",
+  on: "Market data",
+  off: "Not market data",
+};
+
 const STATUS_FILTERS = {
   active: "Active",
   review: "Needs review",
@@ -29,6 +35,10 @@ function board() {
     statusFilter: "active",
     sorts: SORTS,
     statusFilters: STATUS_FILTERS,
+    marketFilter: "all",
+    marketFilters: MARKET_FILTERS,
+    selecting: false,
+    selected: [],
     init() {
       const el = document.getElementById("jobs-data");
       this.jobs = el ? JSON.parse(el.textContent) : [];
@@ -49,6 +59,7 @@ function board() {
       return this.jobs.filter(
         (j) =>
           this.matchesStatus(j) &&
+          (this.marketFilter === "all" || (this.marketFilter === "on") === j.market_data) &&
           (this.showExcluded || !j.excluded) &&
           (this.activeTheme === "all" || j.theme_code === this.activeTheme) &&
           (!q || j.company.toLowerCase().includes(q) || j.title.toLowerCase().includes(q))
@@ -91,6 +102,49 @@ function board() {
       const shown = this.visible.length;
       const toReview = this.jobs.filter((j) => j.status === "new").length;
       return `${shown} shown of ${total}` + (toReview ? ` · ${toReview} need review` : "");
+    },
+    // --- market data (pipeline revamp Phase 1) ---
+    job(jobId) {
+      return this.jobs.find((j) => j.job_id === jobId) || {};
+    },
+    marketOn(jobId) {
+      return !!this.job(jobId).market_data;
+    },
+    async setMarket(ids, value) {
+      const body = new URLSearchParams();
+      ids.forEach((id) => body.append("job_ids", id));
+      body.append("value", value ? "1" : "0");
+      const res = await fetch("/jobs/market-data", { method: "POST", body });
+      if (!res.ok) return;
+      this.jobs.forEach((j) => { if (ids.includes(j.job_id)) j.market_data = value; });
+    },
+    toggleMarket(jobId) {
+      this.setMarket([jobId], !this.marketOn(jobId));
+    },
+    // Select mode: clicking a card toggles it instead of opening the job.
+    cardClick(event, jobId) {
+      if (!this.selecting) return;
+      event.preventDefault();
+      const i = this.selected.indexOf(jobId);
+      if (i === -1) this.selected.push(jobId); else this.selected.splice(i, 1);
+    },
+    isSelected(jobId) {
+      return this.selected.includes(jobId);
+    },
+    selectVisible() {
+      this.selected = this.visible.map((j) => j.job_id);
+    },
+    async bulkMarket(value) {
+      if (!this.selected.length) return;
+      await this.setMarket([...this.selected], value);
+      this.selected = [];
+    },
+    stopSelecting() {
+      this.selecting = false;
+      this.selected = [];
+    },
+    marketCount() {
+      return this.jobs.filter((j) => j.market_data).length;
     },
   };
 }

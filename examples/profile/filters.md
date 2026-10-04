@@ -10,7 +10,6 @@ The screening agent reads these as natural-language rules. "Exclude" removes the
 ## Exclude
 - Jobs requiring fluent or native German (e.g. "verhandlungssicher", "fliessend Deutsch", "German C1/C2 required"). German as a plus is fine.
 - Jobs requiring 8+ years of experience.
-- Titles containing Senior, Staff, Principal, Lead, Head of, Director.
 - Pure sales, recruiting, or marketing roles even if they mention AI.
 
 ## Flag (keep, but highlight)

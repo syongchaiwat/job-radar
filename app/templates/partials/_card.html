@@ -1,5 +1,6 @@
 {% set status = row.tracking.status if row.tracking else 'new' %}
 <a href="/jobs/{{ row.job.id }}" x-show="isVisible('{{ row.job.id }}')" :style="{ order: orderOf('{{ row.job.id }}') }"
+   @click="cardClick($event, '{{ row.job.id }}')" :class="isSelected('{{ row.job.id }}') ? 'ring-2 ring-accent' : ''"
    class="block border rounded-lg p-4 hover:border-gray-600 transition-colors bg-gray-900/40
           {% if status == 'new' %}border-accent/40{% else %}border-gray-800{% endif %}
           {% if status in ('ignored', 'rejected') %}opacity-50{% endif %}">
@@ -32,6 +33,13 @@
   {% endif %}
   <div class="flex items-center justify-between text-xs text-gray-500">
     <span>added {{ row.job.first_seen | relative_time }}</span>
-    <span>{{ row.job.source }}</span>
+    <span class="flex items-center gap-2">
+      <button type="button" @click.prevent.stop="toggleMarket('{{ row.job.id }}')"
+              :class="marketOn('{{ row.job.id }}') ? 'border-accent text-accent bg-accent/10' : 'border-gray-700 text-gray-500 hover:text-gray-300'"
+              class="border rounded-full px-2 py-0.5" title="Market data: this posting shapes archetypes and market stats">
+        <span x-text="marketOn('{{ row.job.id }}') ? '◆ market data' : '◇ market data'"></span>
+      </button>
+      <span>{{ row.job.source }}</span>
+    </span>
   </div>
 </a>

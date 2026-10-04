@@ -2,7 +2,7 @@
 POST /jobs/{job_id}/labels, POST /jobs/{job_id}/description, GET /jobs/{job_id}/breakdown, POST /jobs/{job_id}/cv,
 POST /jobs/{job_id}/cv/regenerate, GET /jobs/{job_id}/cv/download,
 GET /jobs/{job_id}/cv/pdf,
-POST /jobs/{job_id}/cv/edit"""
+POST /jobs/{job_id}/cv/edit, POST /jobs/{job_id}/market-data"""
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -247,3 +247,15 @@ def edit_cv(job_id: str, request: Request, session: Session = Depends(get_sessio
     return templates.TemplateResponse(
         request=request, name="partials/_cv_panel.html", context={**bundle, "max_attempts": MAX_ATTEMPTS}
     )
+
+
+@router.post("/jobs/{job_id}/market-data")
+def toggle_market_data(job_id: str, session: Session = Depends(get_session), value: str = Form(...)):
+    bundle = get_job_bundle(session, job_id)
+    if bundle is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job = bundle["job"]
+    job.market_data = value == "1"
+    session.add(job)
+    session.commit()
+    return RedirectResponse(f"/jobs/{job_id}", status_code=303)

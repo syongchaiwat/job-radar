@@ -21,15 +21,22 @@ def truncate(text: str | None, n: int = 4000) -> str:
     return text[:n]
 
 
-def call(role: str, prompt: str, schema: type, provider: str | None = None):
+def call(role: str, prompt: str, schema: type, provider: str | None = None, method: str | None = None):
+    """method overrides the role's default: "json_schema" (native structured
+    outputs) is more reliable for large nested schemas, where tool calling
+    occasionally returns a list field as plain text."""
     llm = get_llm(role, provider=provider)
-    method = "json_schema" if role in JSON_SCHEMA_ROLES else "function_calling"
+    method = method or ("json_schema" if role in JSON_SCHEMA_ROLES else "function_calling")
     structured = llm.with_structured_output(schema, include_raw=True, method=method)
     start = time.monotonic()
     result = structured.invoke(prompt)
     latency_ms = (time.monotonic() - start) * 1000
 
     parsed = result["parsed"]
+    if parsed is None:
+        # with include_raw=True a validation failure comes back as parsed=None
+        # instead of raising; surface why rather than failing later on None.
+        raise ValueError(f"{schema.__name__}: structured output didn't validate: {result.get('parsing_error')}")
     usage = getattr(result["raw"], "usage_metadata", None) or {}
     log = NodeLog(
         node=schema.__name__,

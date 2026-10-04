@@ -12,7 +12,7 @@ load_dotenv(REPO_ROOT / ".env")
 from fastapi import FastAPI  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
-from app.routes import board, job_detail, profile  # noqa: E402
+from app.routes import board, job_detail, profile, skills  # noqa: E402
 from src.db import get_engine, init_db  # noqa: E402
 
 app = FastAPI(title="job-radar")
@@ -28,3 +28,4 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.include_router(board.router)
 app.include_router(job_detail.router)
 app.include_router(profile.router)
+app.include_router(skills.router)
