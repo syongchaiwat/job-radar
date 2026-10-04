@@ -141,6 +141,12 @@ First build was Streamlit (Board table + widget-based Job Detail + Profile), ver
 - Fix found on the way: Opus 5.5 had a 4,096-token output cap (langchain-anthropic doesn't know the model id), which truncated long outputs and also squeezed the CV critique's thinking; now `max_tokens=32000`.
 - First real rework on 64 market-data jobs: 7 archetypes (ML engineering & MLOps 16, applied data science & forecasting 13, LLM & agentic engineering 12, business/product/people analytics 8, quant finance 6, data & backend engineering 5, AI/data consulting 4), tracks ARI 0.51, 14 flagged, ~80k tokens (~$1), ~3.5 min. Awaiting review on the Classify page.
 
+**Pipeline revamp — Phase 3 (market layer) — Oct 2026.** Built (`src/market/`, Market page):
+- **Profile evidence:** terms from `projects.md` Tools, the CV template's skills and completed coursework, mapped to the skill dictionary deterministically (alias, exact, parenthetical) then by Sonnet once per new term (cached in `ProfileTerm`). The mapping prompt allows umbrella evidence (LightGBM → Machine Learning; Google Cloud Platform → Cloud Computing) but not neighbours (TensorFlow ≠ PyTorch). First version without umbrella rules marked Machine Learning (91% of jobs) as a gap; fixed. You can drop any mapping with "not evidence" (kept across remaps).
+- **Stats per archetype** (active set, market-data members): skill demand share (required vs nice-to-have, last 6 months vs all), profile coverage (demand-weighted), strengths/gaps at ≥15% demand, level/lane/language/domain mix.
+- **Market page:** archetype tabs, demand bars marked strength/gap, gaps ranked, strengths with evidence, Sonnet next-step suggestions (cached, "add to to-dos"), per-archetype to-dos (keyed by slug), member list. Generated vault notes now include strengths, gaps and coverage ("Write archetype notes" button, also on every confirm).
+- Current read (set v0): coverage 64-75%; recurring real gaps PyTorch, Docker/Kubernetes, Azure, R, Git, Power BI, dbt.
+
 ### Phase 5: automation (half a day)
 - GitHub Actions: cron 06:00 Europe/Zurich (cron is UTC: `0 4 * * *` summer / `0 5 * * *` winter, or just pick one), runs ingest + pipeline, commits SQLite + log.
 - Secrets: ANTHROPIC_API_KEY, ADZUNA_APP_ID/KEY, RAPIDAPI_KEY.

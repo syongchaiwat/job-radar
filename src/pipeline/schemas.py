@@ -302,3 +302,24 @@ class Reconciliation(BaseModel):
 
 class SplitNaming(BaseModel):
     parts: list[ArchetypeDef] = Field(description="One definition per group, in the order given.")
+
+
+# --- Market layer (pipeline revamp, Phase 3) ---------------------------------
+
+class TermMapping(BaseModel):
+    term: str
+    skills: list[str] = Field(default_factory=list, description="Exact canonical skill names this term is evidence for; empty if none.")
+
+
+class TermMappings(BaseModel):
+    mappings: list[TermMapping]
+
+
+class NextStep(BaseModel):
+    title: str = Field(description="Short imperative, e.g. 'Containerize job-radar and deploy it with Docker'.")
+    why: str = Field(description="Which gaps it closes and how often the market asks for them.")
+    how: str = Field(description="1-2 concrete sentences on how to do it, building on existing projects where possible.")
+
+
+class NextSteps(BaseModel):
+    steps: list[NextStep]

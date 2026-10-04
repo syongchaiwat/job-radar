@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Market · job-radar{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div>
+    <h1 class="text-3xl font-bold">Market</h1>
+    <p class="text-gray-400 text-sm mt-1">What each archetype's market-data jobs ask for, and how your profile (<code>projects.md</code> tools + CV skills) covers it.
+      {% if overview.set %}Archetype set v{{ overview.set.version }}{% if overview.set.version == 0 %} (the legacy themes: confirm a rework on the <a href="/classify" class="underline">Classify</a> page for learned archetypes){% endif %}.{% endif %}</p>
+  </div>
+
+  {% if request.query_params.get('exported') %}<div class="border border-green-700 rounded p-3 text-sm text-green-300">Archetype notes (with strengths and gaps) written to <code>generated/archetypes/</code> in your profile source.</div>{% endif %}
+  {% if rows %}
+  <form method="post" action="/market/export-notes" class="-mt-3"><button class="text-xs text-gray-400 hover:text-gray-200 underline">Write archetype notes with strengths and gaps to the vault</button></form>
+  {% endif %}
+  {% if not rows %}
+  <p class="text-gray-500">No archetype set yet. Run a rework on the <a href="/classify" class="underline">Classify</a> page.</p>
+  {% else %}
+  <div class="flex flex-wrap gap-2">
+    {% for r in rows %}
+    <a href="/market?a={{ r.archetype.id }}" class="border rounded-full px-3 py-1 text-sm {% if r.archetype.id == current.archetype.id %}bg-accent/20 border-accent text-accent{% else %}border-gray-700 text-gray-400 hover:border-gray-500{% endif %}">
+      {{ r.archetype.name }} <span class="text-xs opacity-70">{{ r.n }}</span>
+    </a>
+    {% endfor %}
+  </div>
+
+  {% set r = current %}
+  <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+    <div class="border border-gray-800 rounded-lg p-3"><p class="text-xs uppercase tracking-wide text-gray-500">Market-data jobs</p><p class="text-2xl font-bold">{{ r.n }}</p><p class="text-xs text-gray-500">{{ r.n_recent }} in the last 6 months</p></div>
+    <div class="border border-gray-800 rounded-lg p-3"><p class="text-xs uppercase tracking-wide text-gray-500">Profile coverage</p><p class="text-2xl font-bold">{{ ((r.coverage or 0) * 100) | round | int }}%</p><p class="text-xs text-gray-500">of demand, weighted by how often each skill is asked</p></div>
+    <div class="border border-gray-800 rounded-lg p-3"><p class="text-xs uppercase tracking-wide text-gray-500">Strengths</p><p class="text-2xl font-bold text-accent">{{ r.strengths | length }}</p><p class="text-xs text-gray-500">asked by ≥15% of jobs, proven</p></div>
+    <div class="border border-gray-800 rounded-lg p-3"><p class="text-xs uppercase tracking-wide text-gray-500">Gaps</p><p class="text-2xl font-bold text-amber-300">{{ r.gaps | length }}</p><p class="text-xs text-gray-500">asked by ≥15% of jobs, no evidence</p></div>
+  </div>
+
+  <div class="border border-gray-800 rounded-lg p-4">
+    <p class="font-semibold">{{ r.archetype.name }}</p>
+    <p class="text-sm text-gray-400">{{ r.archetype.definition }}</p>
+    <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-400 mt-2">
+      <span><span class="text-gray-500">Levels:</span> {% for k, v in r.levels %}{{ k }} {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}</span>
+      <span><span class="text-gray-500">Lanes:</span> {% for k, v in r.lanes %}{{ k | replace('_', ' ') }} {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}</span>
+      {% if r.languages %}<span><span class="text-gray-500">Languages asked:</span> {% for k, v in r.languages %}{{ k }} {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}</span>{% endif %}
+    </div>
+    <p class="text-xs text-gray-500 mt-1"><span class="text-gray-500">Domains:</span> {% for k, v in r.domains %}{{ k }} ({{ v }}){% if not loop.last %} · {% endif %}{% endfor %}</p>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    {# demand #}
+    <div class="lg:col-span-2 border border-gray-800 rounded-lg p-4">
+      <p class="text-xs uppercase tracking-wide text-gray-500 mb-3">Demand: share of jobs asking for each skill</p>
+      <div class="space-y-2" x-data="{ all: false }">
+        {% for d in r.demand %}
+        <div {% if loop.index > 20 %}x-show="all" x-cloak{% endif %}>
+          <div class="flex items-center justify-between text-xs gap-2">
+            <span class="min-w-0 truncate">{{ d.skill }}
+              {% if d.evidenced %}<span class="border border-accent/50 text-accent rounded-full px-1.5 ml-1">strength</span>{% elif d.share >= 0.15 %}<span class="border border-amber-600 text-amber-300 rounded-full px-1.5 ml-1">gap</span>{% endif %}
+            </span>
+            <span class="text-gray-400 whitespace-nowrap">{{ (d.share * 100) | round | int }}% · {{ d.jobs }} job{{ 's' if d.jobs != 1 }}{% if d.nice %} <span class="text-gray-600">({{ d.nice }} nice-to-have)</span>{% endif %}</span>
+          </div>
+          <div class="h-1.5 rounded-full bg-gray-800 overflow-hidden mt-1"><div class="h-full {% if d.evidenced %}bg-accent{% else %}bg-amber-500/80{% endif %}" style="width: {{ (d.share * 100) | round | int }}%"></div></div>
+        </div>
+        {% endfor %}
+        {% if r.demand | length > 20 %}<button type="button" @click="all = !all" class="text-xs text-gray-400 underline mt-1" x-text="all ? 'Show top 20' : 'Show all {{ r.demand | length }}'"></button>{% endif %}
+      </div>
+    </div>
+
+    {# gaps + strengths #}
+    <div class="space-y-4">
+      <div class="border border-amber-800/60 rounded-lg p-4">
+        <p class="text-xs uppercase tracking-wide text-amber-300 mb-2">Gaps, most requested first</p>
+        {% for d in r.gaps %}<p class="text-sm">{{ d.skill }} <span class="text-xs text-gray-500">{{ (d.share * 100) | round | int }}%</span></p>{% else %}<p class="text-sm text-gray-500">No gaps above 15%.</p>{% endfor %}
+      </div>
+      <div id="strengths" class="border border-accent/40 rounded-lg p-4">
+        <p class="text-xs uppercase tracking-wide text-accent mb-2">Strengths and their evidence</p>
+        {% for d in r.strengths %}
+        <div class="text-sm mb-2" x-data="{ open: false }">
+          <button type="button" @click="open = !open" class="hover:underline">{{ d.skill }}</button> <span class="text-xs text-gray-500">{{ (d.share * 100) | round | int }}%</span>
+          <div x-show="open" x-cloak class="text-xs text-gray-400 mt-1 space-y-1">
+            <p>from: {{ d.sources | join(' · ') }}</p>
+            {% for t in d.terms %}
+            <form method="post" action="/market/evidence/remove" class="flex items-center gap-2">
+              <input type="hidden" name="term" value="{{ t }}"><input type="hidden" name="skill_id" value="{{ d.skill_id }}"><input type="hidden" name="archetype_id" value="{{ r.archetype.id }}">
+              <span class="text-gray-500">"{{ t }}"</span><button class="text-amber-300 hover:underline">not evidence</button>
+            </form>
+            {% endfor %}
+          </div>
+        </div>
+        {% else %}<p class="text-sm text-gray-500">None yet.</p>{% endfor %}
+        <p class="text-xs text-gray-600 mt-2">Click a skill to see which profile terms prove it. Remove a mapping that overstates your experience.</p>
+      </div>
+    </div>
+  </div>
+
+  {# next steps #}
+  <div id="next-steps" class="border border-gray-800 rounded-lg p-4 space-y-3">
+    <div class="flex flex-wrap items-center gap-3">
+      <p class="text-xs uppercase tracking-wide text-gray-500">Suggested next steps</p>
+      {% if suggestion_row %}<span class="text-xs text-gray-600">generated {{ suggestion_row.created_at | relative_time }}</span>{% endif %}
+      <form method="post" action="/market/suggest/{{ r.archetype.id }}" class="ml-auto" x-data="{ w: false }" @submit="w = true">
+        <button :disabled="w" class="border border-accent text-accent rounded px-3 py-1 text-sm hover:bg-accent/10 disabled:opacity-50"><span x-show="!w">{{ 'Regenerate' if suggestion else 'Suggest next steps' }}</span><span x-show="w" x-cloak class="animate-pulse">Thinking…</span></button>
+      </form>
+    </div>
+    {% if suggestion %}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {% for s in suggestion %}
+      <div class="border border-gray-800 rounded p-3 text-sm space-y-1">
+        <p class="font-semibold">{{ s.title }}</p>
+        <p class="text-xs text-gray-400">{{ s.why }}</p>
+        <p class="text-xs text-gray-300">{{ s.how }}</p>
+        <form method="post" action="/market/todo"><input type="hidden" name="archetype_id" value="{{ r.archetype.id }}"><input type="hidden" name="text" value="{{ s.title }}"><button class="text-xs text-accent hover:underline">+ add to my to-dos</button></form>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="text-sm text-gray-500">Ask for 3-5 concrete steps that close this archetype's most requested gaps, building on your existing projects.</p>{% endif %}
+  </div>
+
+  {# todos #}
+  <div id="todos" class="border border-gray-800 rounded-lg p-4 space-y-2">
+    <p class="text-xs uppercase tracking-wide text-gray-500">My to-dos for {{ r.archetype.name }}</p>
+    {% for t in todos %}
+    <div class="flex items-center gap-2 text-sm">
+      <form method="post" action="/market/todo/{{ t.id }}/toggle"><input type="hidden" name="archetype_id" value="{{ r.archetype.id }}"><button class="w-4 h-4 border rounded {% if t.done %}bg-accent border-accent{% else %}border-gray-600{% endif %}" title="toggle"></button></form>
+      <span class="{% if t.done %}line-through text-gray-500{% endif %}">{{ t.text }}</span>
+      <form method="post" action="/market/todo/{{ t.id }}/delete" class="ml-auto"><input type="hidden" name="archetype_id" value="{{ r.archetype.id }}"><button class="text-xs text-gray-600 hover:text-gray-300">remove</button></form>
+    </div>
+    {% else %}<p class="text-sm text-gray-500">Nothing yet.</p>{% endfor %}
+    <form method="post" action="/market/todo" class="flex gap-2 pt-1">
+      <input type="hidden" name="archetype_id" value="{{ r.archetype.id }}">
+      <input name="text" placeholder="Add a to-do" class="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm">
+      <button class="border border-gray-700 rounded px-3 py-1 text-sm hover:border-gray-500">Add</button>
+    </form>
+  </div>
+
+  <details class="border border-gray-800 rounded-lg p-4">
+    <summary class="text-sm text-gray-400 cursor-pointer">Market-data jobs in this archetype ({{ r.n }})</summary>
+    <div class="mt-2 space-y-1 text-sm">{% for job, card in r.jobs %}<p><a href="/jobs/{{ job.id }}" class="hover:underline">{{ job.title }}</a> <span class="text-xs text-gray-500">{{ job.company }} · {{ card.level }}</span></p>{% endfor %}</div>
+  </details>
+  {% endif %}
+</div>
+{% endblock %}

@@ -161,14 +161,25 @@ def notes_dir() -> Path:
     return base / "generated" / "archetypes"
 
 
+def _list(items: list[dict], with_sources: bool = False) -> str:
+    if not items:
+        return "- none"
+    return "\n".join(
+        f"- {d['skill']}: {round(d['share'] * 100)}% of jobs" + (f" (from {', '.join(d['sources'][:3])})" if with_sources and d.get("sources") else "")
+        for d in items
+    )
+
+
 def export_notes(session: Session, version: int) -> Path:
-    """Generated archetype notes (overwritten on every confirm). Strengths and gaps
-    are added in Phase 3 (market layer)."""
+    """Generated archetype notes (overwritten on every confirm, refreshable from the Market page)."""
     out = notes_dir()
     out.mkdir(parents=True, exist_ok=True)
     for old in out.glob("*.md"):
         old.unlink()
     archetypes = session.exec(select(Archetype).where(Archetype.set_version == version)).all()
+    from src.market.stats import market_overview
+
+    market = {r["archetype"].id: r for r in market_overview(session)["archetypes"]}
     for a in archetypes:
         member_ids = [r.job_id for r in session.exec(select(JobArchetype).where(
             JobArchetype.set_version == version, JobArchetype.archetype_id == a.id, JobArchetype.role == "primary")).all()]
@@ -199,5 +210,15 @@ updated: {datetime.now(timezone.utc).date().isoformat()}
 ## Most requested skills
 
 {skills}
+
+## Strengths (asked by ≥15% of jobs, proven by your profile)
+
+{_list(market.get(a.id, {}).get("strengths", []), with_sources=True)}
+
+## Gaps (asked by ≥15% of jobs, no evidence yet)
+
+{_list(market.get(a.id, {}).get("gaps", []))}
+
+Profile coverage of this archetype's demand: {round((market.get(a.id, {}).get("coverage") or 0) * 100)}%
 """)
     return out

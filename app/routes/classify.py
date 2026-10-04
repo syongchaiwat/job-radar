@@ -18,7 +18,10 @@ PALETTE = ["#a78bfa", "#60a5fa", "#4ade80", "#fbbf24", "#f472b6", "#2dd4bf", "#f
 
 
 def _latest_run(session: Session) -> ClassifyRun | None:
-    return session.exec(select(ClassifyRun).where(ClassifyRun.status.in_(["running", "draft", "failed"])).order_by(ClassifyRun.id.desc())).first()
+    """The most recent run, shown only while it still needs attention: an older
+    failure must not resurface once a later run was confirmed or discarded."""
+    run = session.exec(select(ClassifyRun).order_by(ClassifyRun.id.desc())).first()
+    return run if run and run.status in ("running", "draft", "failed") else None
 
 
 def _run_or_404(session: Session, run_id: int, status: str = "draft") -> ClassifyRun:
@@ -42,6 +45,8 @@ def classify_page(request: Request, session: Session = Depends(get_session)):
     proposal = rework.load_proposal(run) if run and run.status == "draft" else None
     colors = {}
     retired = []
+    draft_points, draft_legend = [], []
+    current_points, current_legend = ([], []) if proposal or not aset else _current_map(session, aset, current, counts)
     if proposal:
         for i, a in enumerate(sorted(proposal["archetypes"], key=lambda a: -a["stats"]["size"])):
             colors[a["key"]] = PALETTE[i % len(PALETTE)]
@@ -58,6 +63,11 @@ def classify_page(request: Request, session: Session = Depends(get_session)):
             names = {a["key"]: a["name"] for a in proposal["archetypes"]}
             info["arch_name"] = names.get(member_of.get(jid), "no archetype")
             info["flag_note"] = f"closer to {names.get(info.get('check'), info.get('check'))}" if info.get("flagged") else ""
+            draft_points.append({"job_id": jid, "px": info["px"], "py": info["py"], "color": info["color"], "hollow": False,
+                                 "ring": info.get("flagged"), "title": info["title"], "company": info["company"],
+                                 "lane": info["lane"], "arch": info["arch_name"],
+                                 "note": ("flagged: " + info["flag_note"]) if info.get("flagged") else ""})
+        draft_legend = [(a["name"], colors[a["key"]]) for a in sorted(proposal["archetypes"], key=lambda a: -a["stats"]["size"])]
     return templates.TemplateResponse(
         request=request,
         name="classify.html",
@@ -68,8 +78,55 @@ def classify_page(request: Request, session: Session = Depends(get_session)):
             "n_pending_skills": len(session.exec(select(Skill).where(Skill.status == "pending")).all()),
             "run": run, "proposal": proposal, "colors": colors, "retired": retired,
             "current_by_id": {c.id: c for c in current},
+            "draft_points": draft_points, "draft_legend": draft_legend,
+            "current_points": current_points, "current_legend": current_legend,
         },
     )
+
+
+_LAYOUT_CACHE: dict = {}
+
+
+def _current_map(session: Session, aset, archetypes, counts) -> tuple[list, list]:
+    """Map of every job with a role card, colored by its archetype in the active set.
+    The UMAP layout is cached until the set of jobs changes."""
+    from src.archetypes.features import combined_matrix, load_jobs, skill_idf
+    from src.archetypes.track1 import layout_2d
+
+    pool = load_jobs(session)
+    if len(pool) < 6:
+        return [], []
+    key = (aset.version, tuple(pj.job_id for pj in pool))
+    if key not in _LAYOUT_CACHE:
+        _LAYOUT_CACHE.clear()
+        coords = layout_2d(combined_matrix(pool, skill_idf(pool)))
+        _LAYOUT_CACHE[key] = {pj.job_id: (float(coords[i, 0]), float(coords[i, 1])) for i, pj in enumerate(pool)}
+    coords = _LAYOUT_CACHE[key]
+    order = sorted(archetypes, key=lambda a: -counts.get(a.id, 0))
+    color = {a.id: PALETTE[i % len(PALETTE)] for i, a in enumerate(order)}
+    name = {a.id: a.name for a in archetypes}
+    rows = {r.job_id: r for r in session.exec(select(JobArchetype).where(JobArchetype.set_version == aset.version, JobArchetype.role == "primary")).all()}
+    market = {j.id for j in session.exec(select(Job).where(Job.market_data == True)).all()}  # noqa: E712
+    xs = [c[0] for c in coords.values()]
+    ys = [c[1] for c in coords.values()]
+    method_note = {"llm": "matched by the LLM", "embedding": "matched directly", "user": "set by you", "rework": "", "legacy": ""}
+    points = []
+    for pj in pool:
+        x, y = coords[pj.job_id]
+        r = rows.get(pj.job_id)
+        points.append({
+            "job_id": pj.job_id,
+            "px": 20 + 560 * (x - min(xs)) / ((max(xs) - min(xs)) or 1),
+            "py": 20 + 300 * (y - min(ys)) / ((max(ys) - min(ys)) or 1),
+            "color": color.get(r.archetype_id, "#4b5563") if r else "#4b5563",
+            "hollow": pj.job_id not in market,
+            "ring": bool(r and r.method == "llm"),
+            "title": pj.title, "company": pj.company, "lane": pj.lane,
+            "arch": name.get(r.archetype_id, "no archetype") if r else "no archetype",
+            "note": method_note.get(r.method, "") if r else "",
+        })
+    legend = [(a.name, color[a.id]) for a in order] + [("no archetype", "#4b5563")]
+    return points, legend
 
 
 @router.post("/classify/run")

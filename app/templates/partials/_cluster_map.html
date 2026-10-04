@@ -1,0 +1,19 @@
+{# 2D map of jobs (UMAP of role-card embeddings + skills): similar jobs sit close together.
+   points: [{job_id, px, py, color, hollow, ring, title, company, lane, arch, note}], legend: [(name, color)] #}
+<div class="border border-gray-800 rounded-lg p-4 relative" data-cluster-map>
+  <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">{{ map_title }} <span class="normal-case">· similar jobs sit close together · hover a dot, click to open the job</span></p>
+  <div data-map-tip class="hidden absolute z-10 pointer-events-none bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-100 shadow-lg max-w-xs"></div>
+  <svg viewBox="0 0 600 340" width="100%" role="img" aria-label="2D map of jobs colored by archetype">
+    {% for p in points %}
+    <circle cx="{{ p.px | round(1) }}" cy="{{ p.py | round(1) }}" r="{{ 6 if p.ring else 4.5 }}"
+            fill="{{ 'none' if p.hollow else p.color }}" fill-opacity="0.85"
+            stroke="{{ '#fbbf24' if p.ring else (p.color if p.hollow else 'none') }}" stroke-width="1.5" class="cursor-pointer"
+            data-job-id="{{ p.job_id }}" data-title="{{ p.title }}" data-company="{{ p.company }}" data-arch="{{ p.arch }}"
+            data-lane="{{ p.lane | replace('_', ' ') }}" data-note="{{ p.note }}"><title>{{ p.title }} · {{ p.company }}</title></circle>
+    {% endfor %}
+  </svg>
+  <div class="flex flex-wrap gap-3 text-xs mt-2">
+    {% for name, color in legend %}<span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background: {{ color }}"></span>{{ name }}</span>{% endfor %}
+    {% if legend_note %}<span class="text-gray-500">· {{ legend_note }}</span>{% endif %}
+  </div>
+</div>

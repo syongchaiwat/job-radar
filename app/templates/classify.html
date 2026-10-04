@@ -38,10 +38,17 @@
   {% endif %}
 
   {% if run and run.status == 'failed' %}
-  <div class="border border-red-900 rounded p-3 text-sm text-red-300">Rework failed: {{ run.error }}</div>
+  <div class="border border-red-900 rounded p-3 text-sm text-red-300">
+    <p>Rework failed: {{ (run.error or '').split(':')[0] }}{% if ':' in (run.error or '') %}: {{ (run.error or '').split(':')[1][:160] }}{% endif %}</p>
+    <details class="mt-1"><summary class="text-xs text-red-400/70 cursor-pointer">Full error</summary><pre class="text-xs whitespace-pre-wrap break-all mt-1 max-h-64 overflow-auto">{{ run.error }}</pre></details>
+    <p class="text-xs text-red-400/70 mt-1">Run a new rework to try again; the active set is unchanged.</p>
+  </div>
   {% endif %}
 
   {# ---------- current set (no draft) ---------- #}
+  {% if not proposal and current and current_points %}
+  {% with map_title="Current archetypes (set v" ~ aset.version ~ ")", points=current_points, legend=current_legend, legend_note="filled = market data · hollow = not market data · amber ring = matched by the LLM" %}{% include "partials/_cluster_map.html" %}{% endwith %}
+  {% endif %}
   {% if not proposal and current %}
   <div class="border border-gray-800 rounded-lg p-4">
     <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Active set v{{ aset.version }}</p>
@@ -89,44 +96,7 @@
   </div>
 
   {# map #}
-  <div class="border border-gray-800 rounded-lg p-4 relative" id="pool-map">
-    <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Map of the pool (similar jobs sit close together · hover a dot, click to open the job)</p>
-    <div id="map-tip" class="hidden absolute z-10 pointer-events-none bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-100 shadow-lg max-w-xs"></div>
-    <svg viewBox="0 0 600 340" width="100%" role="img" aria-label="2D map of jobs colored by archetype">
-      {% for jid, j in proposal.jobs.items() %}
-      <circle cx="{{ j.px | round(1) }}" cy="{{ j.py | round(1) }}" r="{{ 6 if j.flagged else 4.5 }}" fill="{{ j.color }}" fill-opacity="0.85" stroke="{{ '#fbbf24' if j.flagged else 'none' }}" stroke-width="1.5" class="cursor-pointer"
-              data-job-id="{{ jid }}" data-title="{{ j.title }}" data-company="{{ j.company }}" data-arch="{{ j.arch_name }}" data-lane="{{ j.lane | replace('_', ' ') }}" data-flag="{{ j.flag_note }}"><title>{{ j.title }} · {{ j.company }}</title></circle>
-      {% endfor %}
-    </svg>
-    <div class="flex flex-wrap gap-3 text-xs mt-2">
-      {% for a in proposal.archetypes | sort(attribute='stats.size', reverse=True) %}<span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background: {{ colors[a.key] }}"></span>{{ a.name }}</span>{% endfor %}
-      <span class="text-gray-500">· amber ring = flagged</span>
-    </div>
-  </div>
-  <script>
-    (() => {
-      const map = document.getElementById("pool-map");
-      const tip = document.getElementById("map-tip");
-      if (!map || !tip) return;
-      const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-      map.querySelectorAll("circle[data-title]").forEach((dot) => {
-        dot.addEventListener("mouseenter", () => {
-          const d = dot.dataset;
-          tip.innerHTML = `<b>${esc(d.title)}</b><br><span class="text-gray-400">${esc(d.company)} · ${esc(d.lane)}</span><br>${esc(d.arch)}` +
-            (d.flag ? `<br><span class="text-amber-300">flagged: ${esc(d.flag)}</span>` : "");
-          tip.classList.remove("hidden");
-        });
-        dot.addEventListener("mousemove", (e) => {
-          const box = map.getBoundingClientRect();
-          const x = e.clientX - box.left + 12, y = e.clientY - box.top + 12;
-          tip.style.left = Math.min(x, box.width - tip.offsetWidth - 8) + "px";
-          tip.style.top = y + "px";
-        });
-        dot.addEventListener("mouseleave", () => tip.classList.add("hidden"));
-        dot.addEventListener("click", () => { window.location.href = "/jobs/" + dot.dataset.jobId; });
-      });
-    })();
-  </script>
+  {% with map_title="Map of the draft", points=draft_points, legend=draft_legend, legend_note="amber ring = flagged" %}{% include "partials/_cluster_map.html" %}{% endwith %}
 
   {# archetypes #}
   <form id="merge-form" method="post" action="/classify/{{ run.id }}/merge" class="flex flex-wrap items-center gap-2 text-sm" x-data="{ merging: false }" @submit="merging = true">
@@ -204,4 +174,5 @@
   <p class="text-xs text-gray-500">Edits change the draft only. Confirm creates a new versioned set, assigns jobs outside the pool, and writes archetype notes to your vault (<code>generated/archetypes/</code>).</p>
   {% endif %}
 </div>
+<script src="/static/js/cluster_map.js"></script>
 {% endblock %}

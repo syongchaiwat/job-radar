@@ -221,6 +221,34 @@ class ClassifyRun(SQLModel, table=True):
     finished_at: Optional[datetime] = None
 
 
+class ProfileTerm(SQLModel, table=True):
+    """A tool/skill term from your profile (projects.md Tools, CV template skills)
+    mapped to canonical dictionary skills. Cached per term; only new terms are mapped."""
+
+    term: str = Field(primary_key=True)  # lowercase as written
+    skill_ids: str = "[]"  # JSON list[int]; empty = no dictionary equivalent
+    method: str = "exact"  # exact | alias | stripped | llm
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class MarketSuggestion(SQLModel, table=True):
+    """LLM-suggested next steps to close an archetype's top gaps (on demand)."""
+
+    archetype_id: int = Field(primary_key=True, foreign_key="archetype.id")
+    suggestions: str = "[]"  # JSON list[{title, why, how}]
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class MarketTodo(SQLModel, table=True):
+    """Your own to-dos per archetype; keyed by slug so they survive set versions."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    archetype_slug: str = Field(index=True)
+    text: str
+    done: bool = False
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
 def get_engine(db_path: Optional[str] = None):
     path = Path(db_path or os.environ.get("DATABASE_PATH", DEFAULT_DB_PATH))
     if not path.is_absolute():

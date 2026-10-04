@@ -82,6 +82,8 @@ Mark postings worth learning from as **market data** (◇ on each card, or **Sel
 
 **Archetypes** (Phase 2): the **Classify** page runs a rework over your market-data jobs (stable clustering + an LLM taxonomy, reconciled by Opus), shows the draft with quality signals and a map, and lets you rename, merge, split or move jobs before confirming it as a new versioned set. New jobs are matched to the active set automatically. CLI: `python scripts/archetypes.py status|seed-v0|rework`.
 
+**Market** (Phase 3): per archetype, which skills its market-data jobs ask for, your profile coverage, strengths (with the projects/courses that prove them) and gaps, plus LLM next-step suggestions and a to-do list.
+
 **Review and correct:** on a job's page, **Archive** or **Shortlist**; **Your labels** records your theme and match (a different theme pins it and re-screens). A wrong description can be replaced and re-screened from the same page.
 
 **Generate a CV:** **Prepare CV** on the job page, or `python -m src.pipeline.cv_run --job-id <id>` (`--regenerate` revises the latest draft). Drafts land in `cv_drafts/` with the verdict, rubric scores, feedback and unresolved gaps. When a gap is something the candidate really has, add it to the profile source, sync, and regenerate. Always read a generated CV before sending it.
