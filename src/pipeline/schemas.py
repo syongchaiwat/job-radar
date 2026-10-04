@@ -246,3 +246,59 @@ class RoleCardExtraction(BaseModel):
     )
 
     _coerce_resp = field_validator("responsibilities", "languages_required", mode="before")(_coerce_str_list)
+
+
+# --- Archetypes (pipeline revamp, Phase 2) -----------------------------------
+
+class ArchetypeAdjudication(BaseModel):
+    archetype: str = Field(description="The key of the best-fitting candidate archetype, or 'none' if none of them fits.")
+    secondary: Optional[str] = Field(default=None, description="Key of a second archetype the job also clearly fits, if any.")
+    confidence: float = Field(description="0-1: how confident you are in the choice.")
+    rationale: str = Field(description="One sentence grounded in the job's responsibilities and skills.")
+
+
+class ArchetypeDef(BaseModel):
+    name: str = Field(description="Short name of the kind of work, e.g. 'LLM & agent engineering'.")
+    definition: str = Field(description="1-2 sentences: what jobs in this archetype actually do.")
+    include: str = Field(description="What clearly belongs here (signals in a posting).")
+    exclude: str = Field(description="Near misses that belong elsewhere, and where.")
+    defining_skills: list[str] = Field(description="5-10 skills most characteristic of this archetype (use the skill names from the cards).")
+
+    _coerce_skills = field_validator("defining_skills", mode="before")(_coerce_str_list)
+
+
+class Taxonomy(BaseModel):
+    archetypes: list[ArchetypeDef]
+    changes: str = Field(default="", description="What changed versus the previous version and why (empty for the first batch).")
+
+
+class JobLabel(BaseModel):
+    job_id: str
+    archetype: str = Field(description="Exact archetype name from the taxonomy, or 'none'.")
+    confidence: float = Field(description="0-1")
+
+
+class JobLabels(BaseModel):
+    labels: list[JobLabel]
+
+
+class FinalArchetype(ArchetypeDef):
+    key: str = Field(description="Short lowercase slug, e.g. 'llm-engineering'.")
+    maps_from: list[str] = Field(default_factory=list, description="Names of current archetypes this one continues (empty if new).")
+    from_clusters: list[int] = Field(default_factory=list, description="Track 1 cluster ids this archetype draws on.")
+    from_taxonomy: list[str] = Field(default_factory=list, description="Track 2 archetype names this archetype draws on.")
+
+
+class Assignment(BaseModel):
+    job_id: str
+    archetype: str = Field(description="Final archetype key, or 'none'.")
+
+
+class Reconciliation(BaseModel):
+    archetypes: list[FinalArchetype]
+    assignments: list[Assignment] = Field(description="Every job in the pool exactly once.")
+    notes: str = Field(description="Merges, splits, retirements of current archetypes, and how disagreements between the tracks were resolved.")
+
+
+class SplitNaming(BaseModel):
+    parts: list[ArchetypeDef] = Field(description="One definition per group, in the order given.")

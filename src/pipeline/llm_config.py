@@ -55,7 +55,9 @@ def get_llm(role: str, provider: str | None = None):
     # omit it rather than hardcode 0, since passing it at all is now a 400 for some models.
     if role == "critique":
         # Opus 5.5 defaults to effort "medium"; review quality is the point of this role.
-        return ChatAnthropic(model=ANTHROPIC_MODELS[role], output_config={"effort": "high"})
+        # max_tokens explicitly: langchain-anthropic doesn't know this model id and
+        # falls back to 4096, which truncated long outputs (thinking shares the budget).
+        return ChatAnthropic(model=ANTHROPIC_MODELS[role], output_config={"effort": "high"}, max_tokens=32000)
     return ChatAnthropic(model=ANTHROPIC_MODELS[role])
 
 

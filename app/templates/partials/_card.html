@@ -14,8 +14,10 @@
   </div>
   <h3 class="font-semibold text-lg mb-2">{{ row.job.title }}</h3>
   <div class="flex flex-wrap gap-2 mb-2">
-    {% if row.screening and row.screening.theme %}
-    <span class="text-xs border border-accent/50 text-accent rounded-full px-2 py-0.5">{{ row.screening.theme | theme_label }}</span>
+    {% if row.archetype %}
+    <span class="text-xs border border-accent/50 text-accent rounded-full px-2 py-0.5">{{ row.archetype }}</span>
+    {% else %}
+    <span class="text-xs border border-amber-700 text-amber-300 rounded-full px-2 py-0.5">no archetype</span>
     {% endif %}
     {% if status == 'new' %}
     <span class="text-xs bg-accent/20 text-accent rounded-full px-2 py-0.5">Needs review</span>

@@ -7,7 +7,7 @@ duplicate/stale cards the moment a job gets re-screened.
 """
 from sqlmodel import Session, select
 
-from src.db import CVDraft, GroundTruth, Job, JobSkill, RoleCard, Screening, Skill, Tracking
+from src.db import Archetype, ArchetypeSet, CVDraft, GroundTruth, Job, JobArchetype, JobSkill, RoleCard, Screening, Skill, Tracking
 
 
 def _ensure_tracking(session: Session, job_id: str) -> Tracking:
@@ -81,6 +81,8 @@ def get_job_bundle(session: Session, job_id: str) -> dict | None:
         "cv_versions": cv_versions,  # oldest first, so v1 = index 0
         "label": session.get(GroundTruth, job_id),
         "role_card": session.get(RoleCard, job_id),
+        "breakdown": _cached_breakdown(job),
+        **_archetype_bundle(session, job_id),
         "role_card_skills": _skills_for(session, job_id),
     }
 
@@ -93,3 +95,47 @@ def _skills_for(session: Session, job_id: str) -> dict[str, list[Skill]]:
     for link, skill in rows:
         out.setdefault(link.importance, []).append(skill)
     return out
+
+
+def active_archetypes(session: Session) -> tuple[ArchetypeSet | None, list[Archetype]]:
+    aset = session.exec(select(ArchetypeSet).where(ArchetypeSet.status == "active")).first()
+    if aset is None:
+        return None, []
+    return aset, session.exec(select(Archetype).where(Archetype.set_version == aset.version).order_by(Archetype.name)).all()
+
+
+def job_archetypes(session: Session, aset: ArchetypeSet | None, job_id: str | None = None) -> dict[str, dict[str, JobArchetype]]:
+    """{job_id: {"primary": JobArchetype, "secondary": JobArchetype}} in the active set."""
+    if aset is None:
+        return {}
+    q = select(JobArchetype).where(JobArchetype.set_version == aset.version)
+    if job_id:
+        q = q.where(JobArchetype.job_id == job_id)
+    out: dict[str, dict[str, JobArchetype]] = {}
+    for r in session.exec(q).all():
+        out.setdefault(r.job_id, {})[r.role] = r
+    return out
+
+
+def _archetype_bundle(session: Session, job_id: str) -> dict:
+    aset, archetypes = active_archetypes(session)
+    rows = job_archetypes(session, aset, job_id).get(job_id, {})
+    by_id = {a.id: a for a in archetypes}
+    return {
+        "archetype_set": aset,
+        "archetypes": archetypes,
+        "archetype_primary": rows.get("primary"),
+        "archetype_secondary": rows.get("secondary"),
+        "archetype_by_id": by_id,
+    }
+
+
+def _cached_breakdown(job: Job):
+    from src.pipeline.schemas import DescriptionBreakdown
+
+    if not job.description_breakdown:
+        return None
+    try:
+        return DescriptionBreakdown.model_validate_json(job.description_breakdown)
+    except ValueError:
+        return None

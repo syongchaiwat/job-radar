@@ -133,6 +133,14 @@ First build was Streamlit (Board table + widget-based Job Detail + Profile), ver
 - **Adzuna jobs deleted:** the 82 API jobs (all archived, 80 with thin role cards, no CVs/labels/notes) and 10 skills only they used. Backup: `data/job_radar.db.bak-pre-delete-adzuna`. 58 jobs remain (34 manual, 24 seed).
 **Next:** flag the existing jobs as market data, review pending skills, then Phase 2 (archetypes, tested on example/synthetic jobs until the flagging is done).
 
+**Pipeline revamp — Phase 2 (archetypes) — Oct 2026.** Built (`src/archetypes/`, Classify page):
+- Tables `ArchetypeSet` (versioned, one active, `params` holds calibrated thresholds), `Archetype`, `JobArchetype` (primary/secondary, method embedding/llm/user/rework/legacy, score, confidence, rationale), `ClassifyRun` (background rework + draft proposal JSON).
+- **Set v0** seeded from the five legacy themes (members from your labels, pinned themes, latest screening), so matching works before the first rework.
+- **Single-job assignment** (§5.2): centroid + 5-nearest-neighbor + IDF skill overlap (0.4/0.3/0.3, leave-one-out for members); clear winners assigned directly, the rest adjudicated by Sonnet (structured output). Thresholds calibrated on known members for ≥95% precision (first run: abs 0.67, margin 0.03, 64% direct coverage). New jobs from the board are matched after enrichment; the job page shows archetype, method and reason, and lets you pin, clear or re-match.
+- **Rework** (§5.3): Track 1 = 54 UMAP+HDBSCAN runs (parameter grid x 80% bootstrap) → co-association → average linkage, stability per cluster; Track 2 = Opus taxonomy refined batch by batch, then labels every job; Opus reconciles both with the current set (maps_from), assigns every job; leave-one-out consistency check flags mismatches; quality signals (stability, cohesion, track agreement, ARI), 2D UMAP map. Draft edits: rename, move, merge, split (2-means + Sonnet naming). Confirm → new set, outside-pool jobs assigned, notes exported to `<PROFILE_SOURCE_DIR>/generated/archetypes/`.
+- Fix found on the way: Opus 5.5 had a 4,096-token output cap (langchain-anthropic doesn't know the model id), which truncated long outputs and also squeezed the CV critique's thinking; now `max_tokens=32000`.
+- First real rework on 64 market-data jobs: 7 archetypes (ML engineering & MLOps 16, applied data science & forecasting 13, LLM & agentic engineering 12, business/product/people analytics 8, quant finance 6, data & backend engineering 5, AI/data consulting 4), tracks ARI 0.51, 14 flagged, ~80k tokens (~$1), ~3.5 min. Awaiting review on the Classify page.
+
 ### Phase 5: automation (half a day)
 - GitHub Actions: cron 06:00 Europe/Zurich (cron is UTC: `0 4 * * *` summer / `0 5 * * *` winter, or just pick one), runs ingest + pipeline, commits SQLite + log.
 - Secrets: ANTHROPIC_API_KEY, ADZUNA_APP_ID/KEY, RAPIDAPI_KEY.

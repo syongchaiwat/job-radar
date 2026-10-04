@@ -1,6 +1,6 @@
 # Pipeline revamp: lanes, market data, archetypes, CV library
 
-Status: **approved** (Oct 2026). Phase 1 (foundation) built; later phases pending. Progress is logged in `plan.md`.
+Status: **approved** (Oct 2026). Phases 1 (foundation) and 2 (archetypes) built; phases 3-5 pending. Progress is logged in `plan.md`.
 
 ## 1. Why
 

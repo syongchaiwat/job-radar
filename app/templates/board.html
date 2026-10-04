@@ -31,11 +31,12 @@
     </template>
   </div>
   <div class="flex flex-wrap items-center gap-2 mb-3">
-    <span class="text-xs uppercase tracking-wide text-gray-500 w-14">Theme</span>
-    <button @click="activeTheme='all'" :class="pillClass(activeTheme === 'all')" class="border rounded-full px-3 py-1 text-sm">All</button>
-    {% for code, label in theme_pills %}
-    <button @click="activeTheme='{{ code }}'" :class="pillClass(activeTheme === '{{ code }}')" class="border rounded-full px-3 py-1 text-sm">{{ label }}</button>
+    <span class="text-xs uppercase tracking-wide text-gray-500 w-14">Archetype</span>
+    <button @click="activeArchetype='all'" :class="pillClass(activeArchetype === 'all')" class="border rounded-full px-3 py-1 text-sm">All</button>
+    {% for aid, label in archetype_pills %}
+    <button @click="activeArchetype='{{ aid }}'" :class="pillClass(activeArchetype === '{{ aid }}')" class="border rounded-full px-3 py-1 text-sm">{{ label }}</button>
     {% endfor %}
+    <button @click="activeArchetype='none'" :class="pillClass(activeArchetype === 'none')" class="border rounded-full px-3 py-1 text-sm">No archetype</button>
   </div>
   <div class="flex flex-wrap items-center gap-2 mb-6">
     <span class="text-xs uppercase tracking-wide text-gray-500 w-14">Sort</span>

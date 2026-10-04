@@ -2,7 +2,7 @@
 POST /jobs/{job_id}/labels, POST /jobs/{job_id}/description, GET /jobs/{job_id}/breakdown, POST /jobs/{job_id}/cv,
 POST /jobs/{job_id}/cv/regenerate, GET /jobs/{job_id}/cv/download,
 GET /jobs/{job_id}/cv/pdf,
-POST /jobs/{job_id}/cv/edit, POST /jobs/{job_id}/market-data"""
+POST /jobs/{job_id}/cv/edit, POST /jobs/{job_id}/market-data, POST /jobs/{job_id}/archetype"""
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -258,4 +258,20 @@ def toggle_market_data(job_id: str, session: Session = Depends(get_session), val
     job.market_data = value == "1"
     session.add(job)
     session.commit()
+    return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+
+
+@router.post("/jobs/{job_id}/archetype")
+def set_archetype(job_id: str, session: Session = Depends(get_session), archetype: str = Form(...)):
+    """'auto' re-runs automatic matching; 'none' clears; an id pins it (method=user)."""
+    from src.archetypes.commit import assign_job, set_user_assignment
+
+    if get_job_bundle(session, job_id) is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if archetype == "auto":
+        set_user_assignment(session, job_id, None)
+        assign_job(session, job_id)
+        session.commit()
+    else:
+        set_user_assignment(session, job_id, None if archetype == "none" else int(archetype))
     return RedirectResponse(f"/jobs/{job_id}", status_code=303)

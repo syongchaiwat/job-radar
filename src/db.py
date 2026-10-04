@@ -164,6 +164,63 @@ class Embedding(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+class ArchetypeSet(SQLModel, table=True):
+    """A confirmed set of archetypes. Exactly one is active; older ones stay for history.
+    Version 0 is seeded from the legacy hand-written themes."""
+
+    version: int = Field(primary_key=True)
+    status: str = "active"  # active | superseded
+    notes: Optional[str] = None
+    params: str = "{}"  # JSON: calibrated assignment thresholds etc.
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class Archetype(SQLModel, table=True):
+    """A kind of work, shared across lanes, learned from market-data jobs."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    set_version: int = Field(foreign_key="archetypeset.version")
+    slug: str
+    name: str
+    definition: str
+    include_criteria: str = ""
+    exclude_criteria: str = ""
+    defining_skills: str = "[]"  # JSON list[str]
+    maps_from: str = "[]"  # JSON list[int]: archetype ids in the previous set this one continues
+    legacy_theme: Optional[str] = None  # set v0 only: the theme code it came from
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class JobArchetype(SQLModel, table=True):
+    """Assignment of a job to an archetype within one set (primary, optionally a secondary)."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    job_id: str = Field(foreign_key="job.id", index=True)
+    set_version: int = Field(foreign_key="archetypeset.version")
+    archetype_id: int = Field(foreign_key="archetype.id")
+    role: str = "primary"  # primary | secondary
+    method: str = "embedding"  # embedding | llm | user | rework | legacy
+    score: Optional[float] = None
+    confidence: Optional[float] = None
+    rationale: Optional[str] = None
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class ClassifyRun(SQLModel, table=True):
+    """One archetype rework: runs in the background, produces a draft proposal
+    (JSON) that you edit on the Classify page, then confirm into a new set."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    status: str = "running"  # running | draft | confirmed | discarded | failed
+    progress: str = ""
+    error: Optional[str] = None
+    base_version: Optional[int] = None  # the active set when the run started
+    proposal: str = "{}"  # JSON, see src/archetypes/rework.py
+    cost_tokens: int = 0
+    created_at: datetime = Field(default_factory=_utcnow)
+    finished_at: Optional[datetime] = None
+
+
 def get_engine(db_path: Optional[str] = None):
     path = Path(db_path or os.environ.get("DATABASE_PATH", DEFAULT_DB_PATH))
     if not path.is_absolute():

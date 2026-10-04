@@ -5,7 +5,7 @@ const SORTS = {
   review: "Needs review first",
   newest: "Newest added",
   match: "Best match",
-  theme: "Theme",
+  archetype: "Archetype",
   status: "Status",
   cv: "CV verdict",
 };
@@ -29,7 +29,7 @@ function board() {
     jobs: [],
     config: {},
     search: "",
-    activeTheme: "all",
+    activeArchetype: "all",
     showExcluded: false,
     sort: "review",
     statusFilter: "active",
@@ -61,7 +61,7 @@ function board() {
           this.matchesStatus(j) &&
           (this.marketFilter === "all" || (this.marketFilter === "on") === j.market_data) &&
           (this.showExcluded || !j.excluded) &&
-          (this.activeTheme === "all" || j.theme_code === this.activeTheme) &&
+          (this.activeArchetype === "all" || j.archetype === this.activeArchetype) &&
           (!q || j.company.toLowerCase().includes(q) || j.title.toLowerCase().includes(q))
       );
     },
@@ -79,7 +79,7 @@ function board() {
       switch (this.sort) {
         case "review": return by((j) => (j.status === "new" ? 0 : 1));
         case "match": return by((j) => this.rankIn(this.config.matchOrder, j.match_level));
-        case "theme": return by((j) => this.rankIn(this.config.themeOrder, j.theme_code));
+        case "archetype": return by((j) => this.rankIn(this.config.archetypeOrder, j.archetype));
         case "status": return by((j) => this.rankIn(this.config.statusOrder, j.status));
         case "cv": return by((j) => this.rankIn(["approve", "revise"], j.cv_verdict));
         default: return newest;

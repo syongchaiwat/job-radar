@@ -1,12 +1,4 @@
 <div class="space-y-4">
-  {% if screening.theme %}
-  <div class="border border-gray-800 rounded-lg p-4">
-    <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Theme · classify_theme</p>
-    <p class="text-lg font-semibold mb-1">{{ screening.theme | theme_label }} — {{ screening.theme | theme_name }}</p>
-    {% if screening.theme_rationale %}<p class="text-sm text-gray-400">{{ screening.theme_rationale }}</p>{% endif %}
-  </div>
-  {% endif %}
-
   {% if screening.match_level %}
   <div class="border border-gray-800 rounded-lg p-4" {% if screening.match_rationale %}x-data="{ open: false }"{% endif %}>
     <div class="flex items-center justify-between mb-1">

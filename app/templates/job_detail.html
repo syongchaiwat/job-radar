@@ -14,15 +14,15 @@
   </span>
   {% endif %}
 </div>
-<p class="text-gray-400 text-sm mb-4">{{ job | subtitle_line }}</p>
+<p class="text-gray-400 text-sm mb-1">{{ job | subtitle_line }}</p>
+<p class="text-sm mb-4 flex flex-wrap items-center gap-2 min-w-0">
+  <a href="{{ job.url }}" target="_blank" rel="noopener" class="border border-gray-700 rounded px-3 py-1 hover:border-gray-500 whitespace-nowrap">Open posting ↗</a>
+  <span class="text-xs text-gray-500 break-all">{{ job.url }}</span>
+</p>
 
 {% include "partials/_review_bar.html" %}
 {% include "partials/_role_card.html" %}
 
-<div id="breakdown-section" hx-get="/jobs/{{ job.id }}/breakdown" hx-trigger="load" hx-swap="innerHTML"
-     class="border border-gray-800 rounded-lg p-4 mb-6">
-  <p class="text-sm text-gray-500 animate-pulse">Loading breakdown… (first view of this job can take up to a minute)</p>
-</div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
   <div class="lg:col-span-2">
@@ -33,13 +33,8 @@
     {% endif %}
   </div>
   <div class="space-y-4">
-    {% include "partials/_labels_panel.html" %}
+    {% include "partials/_archetype_panel.html" %}
     {% include "partials/_tracking_panel.html" %}
-    <div class="border border-gray-800 rounded-lg p-4">
-      <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Source</p>
-      <p class="text-sm text-gray-400 break-all mb-3">{{ job.url }}</p>
-      <a href="{{ job.url }}" target="_blank" class="inline-block border border-gray-700 rounded px-4 py-1.5 text-sm hover:border-gray-500">Open posting</a>
-    </div>
   </div>
 </div>
 

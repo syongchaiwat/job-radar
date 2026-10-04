@@ -1,0 +1,29 @@
+{% if archetype_set %}
+<form method="post" action="/jobs/{{ job.id }}/archetype" x-data="{ working: false }" @submit="working = true"
+      class="border {% if archetype_primary %}border-accent/40{% else %}border-amber-800{% endif %} rounded-lg p-4 space-y-2">
+  <p class="text-xs uppercase tracking-wide text-gray-500">Archetype <span class="normal-case text-gray-600">· set v{{ archetype_set.version }}</span></p>
+  {% if archetype_primary %}
+  {% set a = archetype_by_id.get(archetype_primary.archetype_id) %}
+  <p class="font-semibold">{{ a.name if a else '?' }}</p>
+  <p class="text-xs text-gray-500">
+    {% if archetype_primary.method == 'user' %}set by you
+    {% elif archetype_primary.method == 'rework' %}confirmed in the last rework
+    {% elif archetype_primary.method == 'legacy' %}from the legacy theme
+    {% elif archetype_primary.method == 'llm' %}chosen by the LLM{% if archetype_primary.confidence is not none %} · confidence {{ (archetype_primary.confidence * 100) | round | int }}%{% endif %}
+    {% else %}matched directly{% if archetype_primary.score is not none %} · score {{ archetype_primary.score | round(2) }}{% endif %}{% endif %}
+  </p>
+  {% if archetype_primary.rationale and archetype_primary.method in ('llm', 'embedding') %}<p class="text-xs text-gray-400">{{ archetype_primary.rationale }}</p>{% endif %}
+  {% if archetype_secondary %}<p class="text-xs text-gray-500">Also fits: {{ archetype_by_id[archetype_secondary.archetype_id].name }}</p>{% endif %}
+  {% else %}
+  <p class="text-sm text-amber-300">No archetype yet</p>
+  {% endif %}
+  <div class="flex gap-2">
+    <select name="archetype" class="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm">
+      {% for a in archetypes %}<option value="{{ a.id }}" {% if archetype_primary and archetype_primary.archetype_id == a.id %}selected{% endif %}>{{ a.name }}</option>{% endfor %}
+      <option value="none">No archetype</option>
+      <option value="auto">Re-match automatically</option>
+    </select>
+    <button :disabled="working" class="border border-gray-700 rounded px-3 py-1 text-sm hover:border-gray-500 disabled:opacity-50"><span x-show="!working">Set</span><span x-show="working" x-cloak>…</span></button>
+  </div>
+</form>
+{% endif %}

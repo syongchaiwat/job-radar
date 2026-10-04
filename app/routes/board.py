@@ -7,9 +7,10 @@ from sqlmodel import Session
 
 from app.constants import ARCHIVED_STATUSES, IN_PROGRESS_STATUSES, MATCH_LEVELS, STATUS_OPTIONS, THEME_LABELS
 from app.deps import get_session
-from app.services.jobs import list_board_rows
+from app.services.jobs import active_archetypes, job_archetypes, list_board_rows
 from app.templating import templates
 from src.db import Job
+from src.archetypes.commit import assign_job
 from src.enrich import enrich_job
 from src.ingest.dedupe import is_duplicate, job_id as url_job_id
 from src.ingest.manual import build_job, create_manual_job
@@ -21,6 +22,12 @@ router = APIRouter()
 
 def _render_board(request: Request, session: Session, add_form: dict | None = None, added: Job | None = None):
     rows = list_board_rows(session)
+    aset, archetypes = active_archetypes(session)
+    arch_name = {a.id: a.name for a in archetypes}
+    assignments = job_archetypes(session, aset)
+    for row in rows:
+        primary = assignments.get(row["job"].id, {}).get("primary")
+        row["archetype"] = arch_name.get(primary.archetype_id) if primary else None
 
     jobs_json = json.dumps(
         [
@@ -35,6 +42,7 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
                 "match_level": row["screening"].match_level if row["screening"] else None,
                 "cv_verdict": row["cv_draft"].verdict if row["cv_draft"] else None,
                 "market_data": bool(row["job"].market_data),
+                "archetype": str(assignments[row["job"].id]["primary"].archetype_id) if assignments.get(row["job"].id, {}).get("primary") else "none",
             }
             for row in rows
         ]
@@ -42,6 +50,7 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
     board_config = json.dumps(
         {
             "themeOrder": list(THEME_LABELS),
+            "archetypeOrder": [str(a.id) for a in archetypes],
             "statusOrder": STATUS_OPTIONS,
             "matchOrder": MATCH_LEVELS,
             "inProgress": IN_PROGRESS_STATUSES,
@@ -57,6 +66,7 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
             "jobs_json": jobs_json,
             "board_config": board_config,
             "theme_pills": list(THEME_LABELS.items()),
+            "archetype_pills": [(str(a.id), a.name) for a in archetypes],
             "add_form": add_form or {},
             "added": added,
             "added_row": next((r for r in rows if added and r["job"].id == added.id), None),
@@ -111,8 +121,10 @@ def add_job(
             request, session, add_form={"error": f"Added the job, but screening failed: {exc}"}
         )
 
-    try:  # role card + skills + embedding; a failure here never blocks adding the job
+    try:  # role card + skills + embedding + archetype; a failure here never blocks adding the job
         enrich_job(session, job)
+        session.commit()
+        assign_job(session, job.id)
         session.commit()
     except Exception:
         session.rollback()

@@ -15,7 +15,7 @@ def compute_breakdown(job: Job) -> DescriptionBreakdown:
     prompt = load_prompt("breakdown_description").format(
         job_title=job.title,
         job_company=job.company,
-        job_description=truncate(job.description),
+        job_description=truncate(job.description, n=8000),
     )
     parsed, _log = call("fast", prompt, DescriptionBreakdown)
     return parsed
