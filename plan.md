@@ -155,6 +155,16 @@ First build was Streamlit (Board table + widget-based Job Detail + Profile), ver
 - Pages: CV library (cards per archetype, background generation with progress), per-archetype CV page (rendered CV, scores, critique, gaps, versions, edit, PDF), job page CV panel (which CV, lane line, PDF, preview, pick another CV). The per-job CV flow stays available under "Tailor a CV for this job only".
 - First archetype CV (LLM & agentic AI): approved in round 2, honesty 5, relevance 4, ~92k tokens, 1.5 min; refused to claim Azure, Kubernetes, PyTorch, LangChain, Hugging Face, Linux.
 
+**Pipeline revamp — Phase 5 (applications) — Oct 2026.** Built (`src/lanes.py`, `src/letters.py`):
+- **`profile/lanes.md`** (vault): per lane `Key`, `Detect`, `Eligible`, `Value`, `CV slot`; the example profile has a fictional one. The CV library's lane sentence now comes from it.
+- **Lane detection:** deterministic rules from role-card signals (67 of 82 jobs), Sonnet for ambiguous ones (e.g. 6-month internships without a thesis mention); overridable on the job page (re-assesses).
+- **Lane assessment** (Sonnet, `LaneAssessment`): eligibility yes/no/unclear with reasons, lane value 0-1 with reasons, application deadline when stated; re-run when `lanes.md` changes (`scripts/assess_lanes.py --missing`) and on intake.
+- **Ranking:** priority = fit × (0.3 + 0.7 × lane value) × urgency, ×0.3 if not eligible. Fit = share of the job's skills proven by the profile (required 1, nice 0.5); urgency from the deadline (or posting age). Board: lane filter, priority sort, lane/eligibility chips; job page: Lane & priority panel with editable deadline.
+- **Cover letters** (`CoverLetter`): Sonnet draft ⇄ critique (≤2 rounds), English, grounded in the job's CV (library CV with lane sentence, else the per-job CV) + project database; honesty/relevance/specificity/tone, fabrication quotes must exist in the letter, word count 180-380, no grades, must name the company. Edit, regenerate, one-page PDF with the CV header (`cv_pdf.letter_to_pdf`). A first letter took ~73k tokens and ~1 min.
+- **Timeline-first lanes:** internships ≤4 months or starting in summer ("13 weeks", "Summer 2027", May-August start) are summer internships; a guard overrules an LLM "working student" for a full-time internship ≤6 months.
+- **Classify map:** UMAP layout saved to `data/classify_layout.json`; reruns only when the job list or archetype set changes (or via *Recompute map layout*); UMAP calls serialized (`UMAP_LOCK`) after a Numba crash.
+- Fixes on the way: grade check matched "within one grade" (eval wording); letter PDF first rendered everything as the header (CV parser), now a dedicated letter renderer.
+
 ### Phase 5: automation (half a day)
 - GitHub Actions: cron 06:00 Europe/Zurich (cron is UTC: `0 4 * * *` summer / `0 5 * * *` winter, or just pick one), runs ingest + pipeline, commits SQLite + log.
 - Secrets: ANTHROPIC_API_KEY, ADZUNA_APP_ID/KEY, RAPIDAPI_KEY.

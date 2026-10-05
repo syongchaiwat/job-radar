@@ -1,7 +1,10 @@
 """Classify page (archetype rework): GET /classify, POST /classify/run, GET /classify/progress,
 POST /classify/{run_id}/{rename|merge|rewrite|split|move|discard|confirm}"""
 import json
+import os
 import threading
+from pathlib import Path
+
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -10,7 +13,7 @@ from sqlmodel import Session, select
 from app.deps import get_session
 from app.templating import templates
 from src.archetypes import commit, rework
-from src.db import ClassifyRun, Job, JobArchetype, Skill, get_engine
+from src.db import DEFAULT_DB_PATH, ClassifyRun, Job, JobArchetype, Skill, get_engine
 
 router = APIRouter()
 
@@ -84,24 +87,44 @@ def classify_page(request: Request, session: Session = Depends(get_session)):
     )
 
 
-_LAYOUT_CACHE: dict = {}
+LAYOUT_PATH = Path(os.environ.get("DATABASE_PATH", DEFAULT_DB_PATH)).parent / "classify_layout.json"
 
 
-def _current_map(session: Session, aset, archetypes, counts) -> tuple[list, list]:
-    """Map of every job with a role card, colored by its archetype in the active set.
-    The UMAP layout is cached until the set of jobs changes."""
+def _load_layout() -> dict:
+    try:
+        return json.loads(LAYOUT_PATH.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _layout(session: Session, aset, force: bool = False) -> dict[str, tuple[float, float]]:
+    """2D positions for the map, saved to disk so restarts don't rerun UMAP.
+    UMAP reruns only when the set of jobs changed (or a new archetype set / on request)."""
     from src.archetypes.features import combined_matrix, load_jobs, skill_idf
-    from src.archetypes.track1 import layout_2d
 
     pool = load_jobs(session)
     if len(pool) < 6:
+        return {}
+    ids = [pj.job_id for pj in pool]
+    saved = _load_layout()
+    if not force and saved.get("version") == aset.version and sorted(saved.get("coords", {})) == ids:
+        return {k: tuple(v) for k, v in saved["coords"].items()}
+    from src.archetypes.track1 import layout_2d
+
+    xy = layout_2d(combined_matrix(pool, skill_idf(pool)))
+    coords = {jid: (float(xy[i, 0]), float(xy[i, 1])) for i, jid in enumerate(ids)}
+    LAYOUT_PATH.write_text(json.dumps({"version": aset.version, "coords": coords}))
+    return coords
+
+
+def _current_map(session: Session, aset, archetypes, counts) -> tuple[list, list]:
+    """Map of every job with a role card, colored by its archetype in the active set."""
+    from src.archetypes.features import load_jobs
+
+    pool = load_jobs(session)
+    coords = _layout(session, aset)
+    if not coords:
         return [], []
-    key = (aset.version, tuple(pj.job_id for pj in pool))
-    if key not in _LAYOUT_CACHE:
-        _LAYOUT_CACHE.clear()
-        coords = layout_2d(combined_matrix(pool, skill_idf(pool)))
-        _LAYOUT_CACHE[key] = {pj.job_id: (float(coords[i, 0]), float(coords[i, 1])) for i, pj in enumerate(pool)}
-    coords = _LAYOUT_CACHE[key]
     order = sorted(archetypes, key=lambda a: -counts.get(a.id, 0))
     color = {a.id: PALETTE[i % len(PALETTE)] for i, a in enumerate(order)}
     name = {a.id: a.name for a in archetypes}
@@ -127,6 +150,14 @@ def _current_map(session: Session, aset, archetypes, counts) -> tuple[list, list
         })
     legend = [(a.name, color[a.id]) for a in order] + [("no archetype", "#4b5563")]
     return points, legend
+
+
+@router.post("/classify/relayout")
+def relayout(session: Session = Depends(get_session)):
+    aset = rework.active_set(session)
+    if aset:
+        _layout(session, aset, force=True)
+    return RedirectResponse("/classify#map", status_code=303)
 
 
 @router.post("/classify/run")

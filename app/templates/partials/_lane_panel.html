@@ -1,0 +1,39 @@
+{# Lane, eligibility, lane value, deadline, fit and priority (pipeline revamp Phase 5). #}
+{% set a = lane_assessment %}
+<div class="border {% if a and a.eligible == 'no' %}border-amber-800{% else %}border-gray-800{% endif %} rounded-lg p-4 space-y-3">
+  <div class="flex items-center justify-between">
+    <p class="text-xs uppercase tracking-wide text-gray-500">Lane & priority</p>
+    <span class="text-sm font-semibold text-accent" title="fit x lane value x urgency">priority {{ (priority * 100) | round | int }}</span>
+  </div>
+  <form method="post" action="/jobs/{{ job.id }}/lane" x-data="{ w: false }" @submit="w = true" class="flex gap-2">
+    <select name="lane" class="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm">
+      {% for l in lanes %}<option value="{{ l.key }}" {% if job.lane == l.key %}selected{% endif %}>{{ l.name }}</option>{% endfor %}
+      <option value="auto">Detect automatically</option>
+    </select>
+    <button :disabled="w" class="border border-gray-700 rounded px-3 py-1 text-sm hover:border-gray-500 disabled:opacity-50"><span x-show="!w">Set</span><span x-show="w" x-cloak>…</span></button>
+  </form>
+  <p class="text-xs text-gray-500">{% if job.lane_source == 'user' %}set by you{% elif job.lane %}detected{% else %}not assessed yet{% endif %}</p>
+
+  {% if a %}
+  <div class="text-sm">
+    <p><span class="text-gray-500 text-xs">Eligible:</span>
+      <span class="{% if a.eligible == 'yes' %}text-accent{% elif a.eligible == 'no' %}text-amber-300{% else %}text-gray-300{% endif %}">{{ a.eligible }}</span></p>
+    <ul class="text-xs text-gray-400 list-disc list-inside">{% for r in a.eligibility_reasons | from_json %}<li>{{ r }}</li>{% endfor %}</ul>
+  </div>
+  <div class="text-sm">
+    <p><span class="text-gray-500 text-xs">Lane value:</span> {{ (a.value_score * 100) | round | int }}%</p>
+    <ul class="text-xs text-gray-400 list-disc list-inside">{% for r in a.value_reasons | from_json %}<li>{{ r }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  <div class="text-sm">
+    <p><span class="text-gray-500 text-xs">Fit:</span> {% if fit.score is not none %}{{ (fit.score * 100) | round | int }}% of the job's skills proven{% else %}no skills on the role card{% endif %}</p>
+    {% if fit.missing %}<p class="text-xs text-amber-300/80">missing: {{ fit.missing | join(', ') }}</p>{% endif %}
+  </div>
+  <form method="post" action="/jobs/{{ job.id }}/deadline" class="flex items-center gap-2 text-sm">
+    <span class="text-gray-500 text-xs">Deadline</span>
+    <input type="date" name="deadline" value="{{ job.deadline or '' }}" class="bg-gray-900 border border-gray-700 rounded px-2 py-0.5 text-sm">
+    <button class="text-xs text-accent hover:underline">Save</button>
+  </form>
+  <p class="text-xs text-gray-500">Urgency: {{ urgency_note }}</p>
+</div>

@@ -1,0 +1,31 @@
+{# Cover letter for this job (pipeline revamp Phase 5). #}
+{% set letter = cover_letters[-1] if cover_letters else none %}
+<div id="cover-letter" x-data="{ editing: false }" class="border {% if letter %}border-accent/40{% else %}border-gray-800{% endif %} rounded-lg p-4 space-y-3">
+  <div class="flex flex-wrap items-center gap-2">
+    <p class="text-xs uppercase tracking-wide text-gray-500 mr-2">Cover letter</p>
+    {% if letter %}
+    <span class="text-lg font-semibold capitalize">{{ letter.verdict }}</span>
+    {% for label, v in [('Honesty', letter.honesty_score), ('Relevance', letter.relevance_score), ('Specificity', letter.specificity_score), ('Tone', letter.tone_score)] %}<span class="text-xs border border-gray-700 text-gray-400 rounded-full px-2 py-0.5">{{ label }} {{ v }}/5</span>{% endfor %}
+    {% if letter.model_used == 'manual-edit' %}<span class="text-xs border border-amber-600 text-amber-300 rounded-full px-2 py-0.5">edited by you</span>{% endif %}
+    <span class="text-xs text-gray-500">v{{ cover_letters | length }} · {{ letter.created_at | relative_time }}</span>
+    <span class="sm:ml-auto flex items-center gap-3">
+      <button type="button" @click="editing = !editing" class="border border-gray-700 rounded px-3 py-1 text-sm hover:border-gray-500"><span x-show="!editing">Edit</span><span x-show="editing" x-cloak>Cancel edit</span></button>
+      <form method="post" action="/jobs/{{ job.id }}/letter" x-data="{ w: false }" @submit="w = true"><input type="hidden" name="seed_id" value="{{ letter.id }}"><button :disabled="w" class="border border-gray-700 rounded px-3 py-1 text-sm hover:border-gray-500 disabled:opacity-50"><span x-show="!w">Regenerate</span><span x-show="w" x-cloak class="animate-pulse">Writing…</span></button></form>
+      <a href="/jobs/letter/{{ letter.id }}/pdf" class="text-sm text-accent hover:underline">Download PDF</a>
+    </span>
+    {% endif %}
+  </div>
+  {% if letter %}
+  <form x-show="editing" x-cloak method="post" action="/jobs/letter/{{ letter.id }}/edit" class="space-y-2">
+    <textarea name="body" rows="16" class="w-full bg-gray-900 border border-gray-700 rounded p-3 text-sm leading-relaxed">{{ letter.body_markdown }}</textarea>
+    <button class="border border-accent text-accent rounded px-4 py-1.5 text-sm hover:bg-accent/10">Save as v{{ cover_letters | length + 1 }}</button>
+  </form>
+  <div x-show="!editing" class="bg-gray-900/60 rounded p-5"><textarea hidden data-markdown-src>{{ letter.body_markdown }}</textarea><div data-markdown class="prose prose-invert prose-sm max-w-none"></div></div>
+  {% if letter.feedback %}<details><summary class="text-sm text-gray-400 cursor-pointer">Critique feedback</summary><p class="text-sm text-gray-400 mt-2 pl-4">{{ letter.feedback }}</p></details>{% endif %}
+  {% else %}
+  <p class="text-sm text-gray-400">{% if job_cv %}Written from the posting, the {{ job_cv_archetype.name if job_cv_archetype else '' }} CV and your project database; English; checked for honesty, relevance, specificity and tone.{% else %}Needs a CV first: generate this job's archetype CV in the CV library.{% endif %}</p>
+  <form method="post" action="/jobs/{{ job.id }}/letter" x-data="{ w: false }" @submit="w = true">
+    <button :disabled="w" class="border border-accent text-accent rounded px-4 py-1.5 text-sm hover:bg-accent/10 disabled:opacity-50"><span x-show="!w">Write cover letter</span><span x-show="w" x-cloak class="animate-pulse">Writing… (about a minute)</span></button>
+  </form>
+  {% endif %}
+</div>

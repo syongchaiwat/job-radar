@@ -84,6 +84,7 @@ def get_job_bundle(session: Session, job_id: str) -> dict | None:
         "breakdown": _cached_breakdown(job),
         **_archetype_bundle(session, job_id),
         **_cvlib_bundle(session, job),
+        **_lane_bundle(session, job),
         "role_card_skills": _skills_for(session, job_id),
     }
 
@@ -160,4 +161,35 @@ def _cvlib_bundle(session: Session, job: Job) -> dict:
         "lane_sentence": slot,
         "job_archetype": library.primary_archetype(session, job.id),
         "library_cvs": [(cv, by_slug.get(slug)) for slug, cv in latest_by_slug.items()],
+    }
+
+
+def evidenced_skill_ids(session: Session) -> set[int]:
+    from src.market.evidence import evidence
+
+    return set(evidence(session, refresh=False))
+
+
+def ranking_for(session: Session, job: Job, evidenced: set[int]) -> dict:
+    from src import lanes
+    from src.db import LaneAssessment
+
+    a = session.get(LaneAssessment, job.id)
+    f = lanes.fit(session, job.id, evidenced)
+    u, u_note = lanes.urgency(job)
+    return {"assessment": a, "fit": f, "urgency": u, "urgency_note": u_note,
+            "priority": lanes.priority(f["score"], a, u)}
+
+
+def _lane_bundle(session: Session, job: Job) -> dict:
+    from src import letters
+    from src.lanes import lane_by_key, load_lanes
+
+    r = ranking_for(session, job, evidenced_skill_ids(session))
+    return {
+        "lanes": load_lanes(),
+        "job_lane": lane_by_key(job.lane),
+        "lane_assessment": r["assessment"],
+        "fit": r["fit"], "urgency": r["urgency"], "urgency_note": r["urgency_note"], "priority": r["priority"],
+        "cover_letters": letters.letters_for(session, job.id),
     }

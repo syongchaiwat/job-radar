@@ -7,6 +7,7 @@ from average-linkage clustering of that co-association matrix; groups smaller
 than MIN_SIZE become outliers. Stability = mean co-association inside a cluster.
 """
 import itertools
+import threading
 import warnings
 
 import numpy as np
@@ -17,6 +18,9 @@ N_COMPONENTS = (5, 8)
 MIN_CLUSTER = (3, 4, 5)
 SEEDS = (0, 1, 2)
 SUBSAMPLE = 0.8
+# Numba's default threading layer aborts the whole process when two threads run
+# UMAP at once (e.g. two Classify page loads, or a page load during a rework).
+UMAP_LOCK = threading.Lock()
 LINK_THRESHOLD = 0.55  # distance (1 - co-association) at which groups stop merging
 MIN_SIZE = 3
 
@@ -26,7 +30,7 @@ def _one_run(x: np.ndarray, idx: np.ndarray, n_neighbors: int, n_components: int
 
     sub = x[idx]
     nn = max(2, min(n_neighbors, len(sub) - 1))
-    with warnings.catch_warnings():
+    with UMAP_LOCK, warnings.catch_warnings():
         warnings.simplefilter("ignore")
         emb = umap.UMAP(n_neighbors=nn, n_components=min(n_components, len(sub) - 2), metric="cosine",
                         min_dist=0.0, random_state=seed).fit_transform(sub)
@@ -82,7 +86,7 @@ def layout_2d(x: np.ndarray) -> np.ndarray:
     """2D coordinates for the Classify page map (one fixed-seed UMAP run)."""
     import umap
 
-    with warnings.catch_warnings():
+    with UMAP_LOCK, warnings.catch_warnings():
         warnings.simplefilter("ignore")
         return umap.UMAP(n_neighbors=max(2, min(10, len(x) - 1)), n_components=2, metric="cosine",
                          min_dist=0.15, random_state=42).fit_transform(x)

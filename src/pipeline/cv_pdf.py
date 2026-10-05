@@ -295,3 +295,27 @@ def _print(page_html: str, out_path: Path, timeout: float = 60) -> Path:
                 except subprocess.TimeoutExpired:
                     proc.kill()
     return out_path
+
+
+LETTER_CSS = """
+.letter-meta { margin: 14pt 0 10pt; line-height: 1.5; }
+.letter-body p { margin: 0 0 9pt; line-height: 1.5; text-align: left; }
+.letter-body { padding-right: 18pt; }
+"""
+
+
+def letter_to_pdf(header_markdown: str, meta_lines: list[str], body_markdown: str, out_path: Path) -> Path:
+    """Cover letter page: the CV header (name, contacts, photo), then date/recipient lines, then the body
+    as normal paragraphs. Shares cv_style.css so letter and CV look like one set."""
+    lines = [ln.strip() for ln in header_markdown.splitlines() if ln.strip()]
+    name = lines[0][2:].strip() if lines and lines[0].startswith("# ") else ""
+    header = _header(name, lines[1:]) if name else ""
+    meta = "".join(f"<div>{_linked(m)}</div>" for m in meta_lines)
+    body = MarkdownIt("commonmark", {"html": False, "breaks": True}).render(body_markdown)  # keep "Kind regards,\nName"
+    page = (
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;1,400;1,700&display=block" rel="stylesheet">'
+        f"<style>{STYLE_PATH.read_text()}{LETTER_CSS}</style></head><body>"
+        f'{header}<div class="letter-meta">{meta}</div><div class="letter-body">{body}</div></body></html>'
+    )
+    return _print(page, Path(out_path))

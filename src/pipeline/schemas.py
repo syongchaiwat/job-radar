@@ -325,3 +325,32 @@ class NextStep(BaseModel):
 
 class NextSteps(BaseModel):
     steps: list[NextStep]
+
+
+# --- Lanes and cover letters (pipeline revamp, Phase 5) -----------------------
+
+class LaneJudgment(BaseModel):
+    lane: str = Field(description="The key of the lane the job belongs to.")
+    eligible: Literal["yes", "no", "unclear"] = Field(description="Does the job meet the lane's Eligible requirements?")
+    eligibility_reasons: list[str] = Field(default_factory=list, description="Short reasons citing the posting; mention what is unknown.")
+    value_score: float = Field(description="0-1: how well the job scores on the lane's Value criteria.")
+    value_reasons: list[str] = Field(default_factory=list, description="One short reason per Value criterion that applies or clearly doesn't.")
+    deadline: Optional[str] = Field(default=None, description="Application deadline as YYYY-MM-DD if the posting states one, else null.")
+
+    _coerce = field_validator("eligibility_reasons", "value_reasons", mode="before")(_coerce_str_list)
+
+
+class CoverLetterDraft(BaseModel):
+    body_markdown: str = Field(description="The letter from the greeting to the sign-off, in Markdown paragraphs.")
+
+
+class CoverLetterCritique(BaseModel):
+    verdict: Literal["approve", "revise"]
+    honesty_score: int = Field(description="1-5: every claim traceable to the CV or project database.")
+    relevance_score: int = Field(description="1-5: addresses what this posting actually asks for.")
+    specificity_score: int = Field(description="1-5: specific to this company and role, not generic.")
+    tone_score: int = Field(description="1-5: professional, confident, concise.")
+    fabrication_quotes: list[str] = Field(default_factory=list, description="Verbatim text from the letter for every unsupported or altered claim.")
+    feedback: str = Field(description="Concrete changes for the next draft.")
+
+    _coerce = field_validator("fabrication_quotes", mode="before")(_coerce_str_list)

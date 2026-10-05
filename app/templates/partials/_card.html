@@ -24,6 +24,8 @@
     {% else %}
     <span class="text-xs border border-gray-700 text-gray-300 rounded-full px-2 py-0.5">{{ status | status_label }}</span>
     {% endif %}
+    {% if row.lane_name %}<span class="text-xs border border-gray-700 text-gray-300 rounded-full px-2 py-0.5">{{ row.lane_name }}</span>{% endif %}
+    {% if row.eligible == 'no' %}<span class="text-xs border border-amber-700 text-amber-300 rounded-full px-2 py-0.5">not eligible</span>{% endif %}
     {% if row.cv_draft %}
     <span class="text-xs border border-gray-700 text-gray-300 rounded-full px-2 py-0.5">CV · {{ row.cv_draft.verdict }}</span>
     {% endif %}
@@ -34,7 +36,7 @@
   <p class="text-sm text-gray-600 italic mb-3">Not screened yet.</p>
   {% endif %}
   <div class="flex items-center justify-between text-xs text-gray-500">
-    <span>added {{ row.job.first_seen | relative_time }}</span>
+    <span>added {{ row.job.first_seen | relative_time }} · <span class="text-accent" title="fit x lane value x urgency">priority {{ (row.priority * 100) | round | int }}</span>{% if row.job.deadline %} · due {{ row.job.deadline }}{% endif %}</span>
     <span class="flex items-center gap-2">
       <button type="button" @click.prevent.stop="toggleMarket('{{ row.job.id }}')"
               :class="marketOn('{{ row.job.id }}') ? 'border-accent text-accent bg-accent/10' : 'border-gray-700 text-gray-500 hover:text-gray-300'"

@@ -2,6 +2,7 @@
 // hidden with x-show and reordered with CSS `order` (works because the card
 // list is a grid), so nothing reloads.
 const SORTS = {
+  priority: "Priority",
   review: "Needs review first",
   newest: "Newest added",
   match: "Best match",
@@ -30,6 +31,7 @@ function board() {
     config: {},
     search: "",
     activeArchetype: "all",
+    activeLane: "all",
     showExcluded: false,
     sort: "review",
     statusFilter: "active",
@@ -62,6 +64,7 @@ function board() {
           (this.marketFilter === "all" || (this.marketFilter === "on") === j.market_data) &&
           (this.showExcluded || !j.excluded) &&
           (this.activeArchetype === "all" || j.archetype === this.activeArchetype) &&
+          (this.activeLane === "all" || j.lane === this.activeLane) &&
           (!q || j.company.toLowerCase().includes(q) || j.title.toLowerCase().includes(q))
       );
     },
@@ -78,6 +81,7 @@ function board() {
       const by = (fn) => fn(a) - fn(b) || newest;
       switch (this.sort) {
         case "review": return by((j) => (j.status === "new" ? 0 : 1));
+        case "priority": return (b.priority || 0) - (a.priority || 0) || newest;
         case "match": return by((j) => this.rankIn(this.config.matchOrder, j.match_level));
         case "archetype": return by((j) => this.rankIn(this.config.archetypeOrder, j.archetype));
         case "status": return by((j) => this.rankIn(this.config.statusOrder, j.status));

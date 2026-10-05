@@ -86,6 +86,8 @@ Mark postings worth learning from as **market data** (◇ on each card, or **Sel
 
 **CV library** (Phase 4): one CV per archetype, generated from its market brief and reused for every job in it. The library flags a CV as outdated when new market-data jobs arrive or your profile changes; a job's PDF adds a one-line lane sentence (e.g. part-time availability). You can still tailor a CV to a single job.
 
+**Lanes, ranking and cover letters** (Phase 5): `profile/lanes.md` defines your application lanes (e.g. working student, thesis internship, summer internship, full-time). Each job gets a lane, an eligibility check and a lane-value score; the board ranks by priority = fit × lane value × urgency (deadline). On a job's page, **Write cover letter** drafts an English letter grounded in the job's CV and your projects, critiqued for honesty, relevance, specificity and tone; edit it and download a one-page PDF. Backfill: `python scripts/assess_lanes.py --missing`.
+
 **Review and correct:** on a job's page, **Archive** or **Shortlist**; **Your labels** records your theme and match (a different theme pins it and re-screens). A wrong description can be replaced and re-screened from the same page.
 
 **Generate a CV:** **Prepare CV** on the job page, or `python -m src.pipeline.cv_run --job-id <id>` (`--regenerate` revises the latest draft). Drafts land in `cv_drafts/` with the verdict, rubric scores, feedback and unresolved gaps. When a gap is something the candidate really has, add it to the profile source, sync, and regenerate. Always read a generated CV before sending it.

@@ -31,6 +31,13 @@
     </template>
   </div>
   <div class="flex flex-wrap items-center gap-2 mb-3">
+    <span class="text-xs uppercase tracking-wide text-gray-500 w-14">Lane</span>
+    <button @click="activeLane='all'" :class="pillClass(activeLane === 'all')" class="border rounded-full px-3 py-1 text-sm">All</button>
+    {% for key, label in lane_pills %}
+    <button @click="activeLane='{{ key }}'" :class="pillClass(activeLane === '{{ key }}')" class="border rounded-full px-3 py-1 text-sm">{{ label }}</button>
+    {% endfor %}
+  </div>
+  <div class="flex flex-wrap items-center gap-2 mb-3">
     <span class="text-xs uppercase tracking-wide text-gray-500 w-14">Archetype</span>
     <button @click="activeArchetype='all'" :class="pillClass(activeArchetype === 'all')" class="border rounded-full px-3 py-1 text-sm">All</button>
     {% for aid, label in archetype_pills %}

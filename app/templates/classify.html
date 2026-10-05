@@ -48,6 +48,9 @@
   {# ---------- current set (no draft) ---------- #}
   {% if not proposal and current and current_points %}
   {% with map_title="Current archetypes (set v" ~ aset.version ~ ")", points=current_points, legend=current_legend, legend_note="filled = market data · hollow = not market data · amber ring = matched by the LLM" %}{% include "partials/_cluster_map.html" %}{% endwith %}
+  <form method="post" action="/classify/relayout" class="text-right -mt-2 mb-4" id="map">
+    <button class="text-xs text-gray-500 hover:text-gray-300 underline" title="The layout reruns automatically when jobs are added or removed; this forces a fresh UMAP run (a few seconds)">Recompute map layout</button>
+  </form>
   {% endif %}
   {% if not proposal and current %}
   <div class="border border-gray-800 rounded-lg p-4">

@@ -31,6 +31,9 @@ class Job(SQLModel, table=True):
     forced_theme: Optional[str] = None  # user override: screening skips classify_theme and uses this instead
     description_breakdown: Optional[str] = None  # JSON-encoded DescriptionBreakdown, computed lazily on first Job Detail view
     description_breakdown_computed_at: Optional[datetime] = None
+    lane: Optional[str] = None  # lanes.md key (working-student, thesis-internship, ...)
+    lane_source: Optional[str] = None  # auto | user
+    deadline: Optional[str] = None  # application deadline, ISO date (from the posting or set by you)
     cv_version_id: Optional[int] = None  # CV library choice for this job; None = latest CV of its archetype
     market_data: bool = False  # user switch: this posting shapes archetypes and market stats (independent of application status)
 
@@ -277,6 +280,39 @@ class CVVersion(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+class LaneAssessment(SQLModel, table=True):
+    """Per-job lane check against lanes.md: eligibility, lane value, deadline."""
+
+    job_id: str = Field(primary_key=True, foreign_key="job.id")
+    lane: str
+    eligible: str = "unclear"  # yes | no | unclear
+    eligibility_reasons: str = "[]"
+    value_score: float = 0.5
+    value_reasons: str = "[]"
+    lanes_hash: str = ""
+    model: Optional[str] = None
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class CoverLetter(SQLModel, table=True):
+    """One cover letter per job (versioned), grounded in the job's CV and projects."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    job_id: str = Field(foreign_key="job.id", index=True)
+    cv_ref: Optional[str] = None  # "library:<CVVersion id>" or "job:<CVDraft id>"
+    body_markdown: str
+    verdict: str = "revise"
+    honesty_score: Optional[int] = None
+    relevance_score: Optional[int] = None
+    specificity_score: Optional[int] = None
+    tone_score: Optional[int] = None
+    feedback: Optional[str] = None
+    attempt_count: int = 0
+    model_used: Optional[str] = None  # "manual-edit" for hand edits
+    tokens: Optional[int] = None
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
 def get_engine(db_path: Optional[str] = None):
     path = Path(db_path or os.environ.get("DATABASE_PATH", DEFAULT_DB_PATH))
     if not path.is_absolute():
@@ -296,6 +332,9 @@ _ADDED_COLUMNS = {
         "forced_theme": "VARCHAR",
         "market_data": "BOOLEAN NOT NULL DEFAULT 0",
         "cv_version_id": "INTEGER",
+        "lane": "VARCHAR",
+        "lane_source": "VARCHAR",
+        "deadline": "VARCHAR",
     },
 }
 

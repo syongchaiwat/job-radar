@@ -275,3 +275,83 @@ def set_archetype(job_id: str, session: Session = Depends(get_session), archetyp
     else:
         set_user_assignment(session, job_id, None if archetype == "none" else int(archetype))
     return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+
+
+@router.post("/jobs/{job_id}/lane")
+def set_lane(job_id: str, session: Session = Depends(get_session), lane: str = Form(...)):
+    from src.db import Job
+    from src.lanes import assess_job
+
+    job = session.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if lane == "auto":
+        job.lane, job.lane_source = None, None
+    else:
+        job.lane, job.lane_source = lane, "user"
+    session.add(job)
+    assess_job(session, job)  # eligibility and value depend on the lane
+    session.commit()
+    return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+
+
+@router.post("/jobs/{job_id}/deadline")
+def set_deadline(job_id: str, session: Session = Depends(get_session), deadline: str = Form("")):
+    from src.db import Job
+
+    job = session.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job.deadline = deadline or None
+    session.add(job)
+    session.commit()
+    return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+
+
+@router.post("/jobs/{job_id}/letter")
+def write_letter(job_id: str, session: Session = Depends(get_session), seed_id: str = Form("")):
+    from src import letters
+    from src.db import CoverLetter, Job
+
+    job = session.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    seed = session.get(CoverLetter, int(seed_id)) if seed_id else None
+    try:
+        letters.generate(session, job, seed)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return RedirectResponse(f"/jobs/{job_id}#cover-letter", status_code=303)
+
+
+@router.post("/jobs/letter/{letter_id}/edit")
+def edit_letter(letter_id: int, session: Session = Depends(get_session), body: str = Form(...)):
+    from src import letters
+    from src.db import CoverLetter
+
+    base = session.get(CoverLetter, letter_id)
+    if base is None:
+        raise HTTPException(status_code=404, detail="Letter not found")
+    body = body.replace("\r\n", "\n").strip()
+    if body != base.body_markdown.strip():
+        letters.save_edit(session, base, body)
+    return RedirectResponse(f"/jobs/{base.job_id}#cover-letter", status_code=303)
+
+
+@router.get("/jobs/letter/{letter_id}/pdf")
+def letter_pdf(letter_id: int, session: Session = Depends(get_session)):
+    import tempfile
+    from pathlib import Path as P
+
+    from src import letters
+    from src.db import CoverLetter, Job
+
+    letter = session.get(CoverLetter, letter_id)
+    if letter is None:
+        raise HTTPException(status_code=404, detail="Letter not found")
+    job = session.get(Job, letter.job_id)
+    out = P(tempfile.mkdtemp()) / f"Cover_letter_{(job.company or 'job').replace(' ', '_')}.pdf"
+    from src.pipeline.cv_pdf import letter_to_pdf
+
+    letter_to_pdf(*letters.pdf_parts(job, letter), out)
+    return FileResponse(out, media_type="application/pdf", filename=out.name)

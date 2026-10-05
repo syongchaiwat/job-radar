@@ -12,6 +12,7 @@ __pycache__/
 # Personal data: synced locally from PROFILE_SOURCE_DIR (or examples/), never committed
 /profile/
 /data/*.db
+/data/classify_layout.json
 /data/seed-jobs.md
 /data/seed_descriptions.json
 /evals/labeled_jobs.jsonl

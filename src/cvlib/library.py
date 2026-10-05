@@ -23,7 +23,7 @@ from src.pipeline.schemas import CVDraftState
 MANUAL_EDIT = "manual-edit"
 TEMPLATE = REPO_ROOT / "cv_profile" / "cv_template.md"
 
-# Default lane sentences until lanes.md defines them (Phase 5). Keyed by the
+# Fallback lane sentences when a job has no lane from lanes.md yet. Keyed by the
 # role card's employment_type; full-time gets none.
 DEFAULT_LANE_SLOTS = {
     "working_student": "Available part-time during the semester.",
@@ -213,9 +213,15 @@ def cv_for_job(session: Session, job: Job) -> CVVersion | None:
 
 
 def lane_slot(session: Session, job: Job) -> str:
+    """The job's lane sentence from lanes.md; falls back to a default by employment type."""
+    from src.lanes import lane_by_key
+
+    lane = lane_by_key(job.lane)
+    if lane is not None:
+        return lane.slot
     card = session.get(RoleCard, job.id)
-    lane = json.loads(card.lane_signals or "{}").get("employment_type") if card else None
-    return DEFAULT_LANE_SLOTS.get(lane or "", "")
+    et = json.loads(card.lane_signals or "{}").get("employment_type") if card else None
+    return DEFAULT_LANE_SLOTS.get(et or "", "")
 
 
 def apply_lane_slot(markdown: str, slot: str) -> str:
