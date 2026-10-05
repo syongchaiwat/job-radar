@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ card.archetype.name }} CV · job-radar{% endblock %}
+{% block content %}
+{% set a = card.archetype %}{% set cv = card.latest %}
+<a href="/cvs" class="text-sm text-gray-400 hover:text-gray-100">← CV library</a>
+<div class="mt-3 mb-4">
+  <p class="text-xs uppercase tracking-wide text-accent">Archetype CV</p>
+  <h1 class="text-3xl font-bold">{{ a.name }}</h1>
+  <p class="text-sm text-gray-400 mt-1">{{ a.definition }}</p>
+</div>
+
+<div id="cv-panel" x-data="{ editing: false }" class="border {% if card.status.outdated %}border-amber-700/70{% else %}border-accent/40{% endif %} rounded-lg p-4 space-y-4">
+  {% if card.running and not card.running.error %}
+  <div hx-get="/cvs/{{ a.id }}/status" hx-trigger="every 4s" hx-swap="innerHTML" class="text-accent"><span class="animate-pulse">Drafting and critiquing… (2-3 minutes)</span></div>
+  {% endif %}
+  {% if card.running and card.running.error %}<p class="text-sm text-red-300">Last attempt failed: {{ card.running.error[:300] }}</p>{% endif %}
+
+  {% if cv %}
+  <div class="flex flex-wrap items-center gap-2">
+    <span class="text-lg font-semibold capitalize">{{ cv.verdict }}</span>
+    {% for label, v in [('Relevance', cv.relevance_score), ('Honesty', cv.honesty_score), ('Impact', cv.impact_score), ('Clarity', cv.clarity_score), ('Keywords', cv.keyword_alignment_score)] %}
+    <span class="text-xs border border-gray-700 text-gray-400 rounded-full px-2 py-0.5">{{ label }} {{ v }}/5</span>
+    {% endfor %}
+    {% if cv.model_used == 'manual-edit' %}<span class="text-xs border border-amber-600 text-amber-300 rounded-full px-2 py-0.5" title="Scores describe the version you edited from">edited by you</span>{% endif %}
+    <span class="text-xs text-gray-500">v{{ versions | length }} · {{ cv.created_at | relative_time }} · built from {{ (cv.source_job_ids | from_json) | length }} jobs</span>
+    <span class="sm:ml-auto flex items-center gap-3">
+      <button type="button" @click="editing = !editing" class="border border-gray-700 rounded px-3 py-1 text-sm hover:border-gray-500"><span x-show="!editing">Edit</span><span x-show="editing" x-cloak>Cancel edit</span></button>
+      {% if not (card.running and not card.running.error) %}
+      <form method="post" action="/cvs/{{ a.id }}/generate"><input type="hidden" name="seed_id" value="{{ cv.id }}"><button class="border border-gray-700 rounded px-3 py-1 text-sm hover:border-gray-500">Regenerate</button></form>
+      {% endif %}
+      <a href="/cvs/version/{{ cv.id }}/pdf" class="text-sm text-accent hover:underline">Download PDF</a>
+    </span>
+  </div>
+  {% if card.status.outdated %}<p class="text-sm text-amber-300">Outdated: {{ card.status.reasons | join('; ') }}. Regenerate to include them.</p>{% endif %}
+
+  <form x-show="editing" x-cloak method="post" action="/cvs/version/{{ cv.id }}/edit" class="space-y-2">
+    <textarea name="markdown" rows="32" class="w-full bg-gray-900 border border-gray-700 rounded p-3 text-sm font-mono leading-relaxed">{{ cv.draft_markdown }}</textarea>
+    <button class="border border-accent text-accent rounded px-4 py-1.5 text-sm hover:bg-accent/10">Save as v{{ versions | length + 1 }}</button>
+  </form>
+  <div x-show="!editing" class="bg-gray-900/60 rounded p-5">
+    <textarea hidden data-markdown-src>{{ cv.draft_markdown }}</textarea>
+    <div data-markdown class="prose prose-invert prose-sm max-w-none"></div>
+  </div>
+  {% if cv.overall_feedback %}<details><summary class="text-sm text-gray-400 cursor-pointer">Why this verdict (critique feedback)</summary><p class="text-sm text-gray-400 mt-2 pl-4">{{ cv.overall_feedback }}</p></details>{% endif %}
+  {% set gaps = cv.unresolved_gaps | from_json %}
+  {% if gaps %}<details><summary class="text-sm text-gray-400 cursor-pointer">Unresolved gaps ({{ gaps | length }}): add real evidence to your profile source, then regenerate</summary><ul class="text-sm text-gray-300 list-disc list-inside mt-2 pl-4">{% for g in gaps %}<li>{{ g }}</li>{% endfor %}</ul></details>{% endif %}
+  {% if versions | length > 1 %}
+  <details><summary class="text-sm text-gray-400 cursor-pointer">Earlier versions</summary>
+    <div class="mt-2 pl-4 space-y-1 text-sm">{% for v in versions[:-1] | reverse %}<p class="text-gray-400">v{{ loop.revindex }} · {{ v.verdict }} · {{ v.created_at | relative_time }}{% if v.model_used == 'manual-edit' %} · edited{% endif %} · <a href="/cvs/version/{{ v.id }}/pdf" class="text-accent hover:underline">PDF</a></p>{% endfor %}</div>
+  </details>
+  {% endif %}
+  {% elif not card.running %}
+  <p class="text-sm text-gray-400">No CV for this archetype yet.</p>
+  <form method="post" action="/cvs/{{ a.id }}/generate"><button class="border border-accent text-accent rounded px-4 py-1.5 text-sm hover:bg-accent/10" {% if card.row.n == 0 %}disabled{% endif %}>Generate</button></form>
+  <p class="text-xs text-gray-500">Built from the market brief of {{ card.row.n }} market-data jobs; Sonnet drafts, Opus critiques, with the usual guardrails.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -91,7 +91,8 @@ def draft_cv_node(state: CVDraftState) -> dict:
         cv_template=cvpc.load_cv_template(),
         projects=pc.load_projects_for_cv(),
         coursework=pc.load_coursework_for_cv(),
-        theme_profile=pc.load_theme(state.theme),
+        theme_profile=state.theme_profile_text or pc.load_theme(state.theme),
+        target_note=state.target_note,
         job_title=state.job_title,
         job_company=state.job_company,
         job_location=state.job_location or "(not specified)",
@@ -110,6 +111,7 @@ def draft_cv_node(state: CVDraftState) -> dict:
 
 def critique_cv_node(state: CVDraftState) -> dict:
     prompt = _load_prompt("critique_cv").format(
+        target_note=state.target_note,
         cv_template=cvpc.load_cv_template(),
         projects=pc.load_projects_for_cv(),
         coursework=pc.load_coursework_for_cv(),

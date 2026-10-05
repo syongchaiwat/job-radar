@@ -140,6 +140,8 @@ class CVDraftState(BaseModel):
     job_level: Optional[str] = None
     job_description: Optional[str] = None
     theme: str  # "1" | "2" | "3a" | "3b" | "4" -- caller guarantees a real theme, never None/"none"
+    theme_profile_text: Optional[str] = None  # archetype CVs: market-derived framing instead of a theme file
+    target_note: str = ""  # archetype CVs: tells both nodes the "posting" is a market brief
 
     # seed context for a "regenerate" run only; both None for a fresh "Prepare CV" run
     seed_draft: Optional[str] = None

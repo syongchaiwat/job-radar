@@ -1,0 +1,36 @@
+{# Job page: the archetype CV this job uses (CV library), with its lane sentence. #}
+<div id="cv-library" class="border {% if job_cv %}border-accent/40{% else %}border-gray-800{% endif %} rounded-lg p-4 space-y-3">
+  <div class="flex flex-wrap items-center gap-2">
+    <p class="text-xs uppercase tracking-wide text-gray-500 mr-2">CV</p>
+    {% if job_cv %}
+    <span class="font-semibold">{{ job_cv_archetype.name if job_cv_archetype else job_cv.archetype_slug }} CV</span>
+    <span class="text-xs border rounded-full px-2 py-0.5 {% if job_cv.verdict == 'approve' %}border-accent/50 text-accent{% else %}border-gray-600 text-gray-400{% endif %}">{{ job_cv.verdict }}</span>
+    <span class="text-xs text-gray-500">{{ job_cv.created_at | relative_time }}{% if job.cv_version_id %} · pinned for this job{% endif %}</span>
+    <span class="sm:ml-auto flex gap-3 text-sm">
+      <a href="/jobs/{{ job.id }}/cvlib/pdf" class="text-accent hover:underline">Download PDF{% if lane_sentence %} (with lane line){% endif %}</a>
+      <a href="/cvs/{{ job_cv.archetype_id }}" class="text-gray-400 hover:text-gray-200 underline">Open in library</a>
+    </span>
+    {% elif job_archetype %}
+    <span class="text-sm text-gray-400">No CV for {{ job_archetype.name }} yet.</span>
+    <a href="/cvs/{{ job_archetype.id }}" class="text-sm text-accent hover:underline sm:ml-auto">Generate it in the CV library</a>
+    {% else %}
+    <span class="text-sm text-gray-500">Assign an archetype to use a library CV.</span>
+    {% endif %}
+  </div>
+  {% if lane_sentence %}<p class="text-xs text-gray-500">Lane line added to the summary for this job: <span class="text-gray-300">"{{ lane_sentence }}"</span></p>{% endif %}
+  {% if library_cvs %}
+  <form method="post" action="/jobs/{{ job.id }}/cvlib" class="flex flex-wrap items-center gap-2 text-sm">
+    <span class="text-gray-500 text-xs">Use</span>
+    <select name="cv_version_id" class="bg-gray-900 border border-gray-700 rounded px-2 py-1">
+      <option value="" {% if not job.cv_version_id %}selected{% endif %}>Latest CV of this job's archetype</option>
+      {% for cv, a in library_cvs %}<option value="{{ cv.id }}" {% if job.cv_version_id == cv.id %}selected{% endif %}>{{ a.name if a else cv.archetype_slug }} CV (latest)</option>{% endfor %}
+    </select>
+    <button class="border border-gray-700 rounded px-3 py-1 hover:border-gray-500">Set</button>
+  </form>
+  {% endif %}
+  {% if job_cv %}
+  <details><summary class="text-sm text-gray-400 cursor-pointer hover:text-gray-200">Preview</summary>
+    <div class="bg-gray-900/60 rounded p-5 mt-2"><textarea hidden data-markdown-src>{{ job_cv_markdown }}</textarea><div data-markdown class="prose prose-invert prose-sm max-w-none"></div></div>
+  </details>
+  {% endif %}
+</div>

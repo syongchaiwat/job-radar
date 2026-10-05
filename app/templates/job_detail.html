@@ -39,8 +39,13 @@
 </div>
 
 <div class="mt-6">
-  {% include "partials/_cv_panel.html" %}
+  {% include "partials/_cvlib_panel.html" %}
 </div>
+
+<details class="mt-4">
+  <summary class="text-sm text-gray-500 cursor-pointer hover:text-gray-300">Tailor a CV for this job only (the older per-job flow: a full draft/critique run for this posting)</summary>
+  <div class="mt-3">{% include "partials/_cv_panel.html" %}</div>
+</details>
 
 {% if screening %}
 <div class="mt-6">

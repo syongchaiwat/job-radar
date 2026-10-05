@@ -83,6 +83,7 @@ def get_job_bundle(session: Session, job_id: str) -> dict | None:
         "role_card": session.get(RoleCard, job_id),
         "breakdown": _cached_breakdown(job),
         **_archetype_bundle(session, job_id),
+        **_cvlib_bundle(session, job),
         "role_card_skills": _skills_for(session, job_id),
     }
 
@@ -139,3 +140,24 @@ def _cached_breakdown(job: Job):
         return DescriptionBreakdown.model_validate_json(job.description_breakdown)
     except ValueError:
         return None
+
+
+def _cvlib_bundle(session: Session, job: Job) -> dict:
+    from src.cvlib import library
+    from src.db import CVVersion
+
+    job_cv = library.cv_for_job(session, job)
+    slot = library.lane_slot(session, job)
+    latest_by_slug: dict[str, CVVersion] = {}
+    for cv in session.exec(select(CVVersion).order_by(CVVersion.id)).all():
+        latest_by_slug[cv.archetype_slug] = cv
+    aset, archetypes = active_archetypes(session)
+    by_slug = {a.slug: a for a in archetypes}
+    return {
+        "job_cv": job_cv,
+        "job_cv_archetype": by_slug.get(job_cv.archetype_slug) if job_cv else None,
+        "job_cv_markdown": library.apply_lane_slot(job_cv.draft_markdown, slot) if job_cv else "",
+        "lane_sentence": slot,
+        "job_archetype": library.primary_archetype(session, job.id),
+        "library_cvs": [(cv, by_slug.get(slug)) for slug, cv in latest_by_slug.items()],
+    }

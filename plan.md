@@ -147,6 +147,14 @@ First build was Streamlit (Board table + widget-based Job Detail + Profile), ver
 - **Market page:** archetype tabs, demand bars marked strength/gap, gaps ranked, strengths with evidence, Sonnet next-step suggestions (cached, "add to to-dos"), per-archetype to-dos (keyed by slug), member list. Generated vault notes now include strengths, gaps and coverage ("Write archetype notes" button, also on every confirm).
 - Current read (set v0): coverage 64-75%; recurring real gaps PyTorch, Docker/Kubernetes, Azure, R, Git, Power BI, dbt.
 
+**Pipeline revamp — Phase 4 (CV library) — Oct 2026.** Built (`src/cvlib/`, CV library pages):
+- `CVVersion` table (one versioned CV per archetype, keyed by slug so it survives archetype-set versions) and `Job.cv_version_id` (pin a CV per job; default = latest CV of the job's archetype).
+- The existing draft ⇄ critique loop is reused unchanged (all guardrails apply), fed a **market brief** instead of one posting: definition, top-25 demanded skills with shares, responsibilities sampled from member role cards, level/lane/domain mix; framing = market strengths to lead with and gaps never to claim; a target note tells both nodes it's an archetype, not a company.
+- **Outdated badge:** source job ids + a market hash and a profile hash (projects, coursework, CV template) stored per version; the library flags new/removed market-data jobs, demand changes, or profile edits. Regenerate is explicit only.
+- **Lane slots:** a one-line sentence appended to the summary at PDF time per job (defaults per employment type until `lanes.md`, Phase 5).
+- Pages: CV library (cards per archetype, background generation with progress), per-archetype CV page (rendered CV, scores, critique, gaps, versions, edit, PDF), job page CV panel (which CV, lane line, PDF, preview, pick another CV). The per-job CV flow stays available under "Tailor a CV for this job only".
+- First archetype CV (LLM & agentic AI): approved in round 2, honesty 5, relevance 4, ~92k tokens, 1.5 min; refused to claim Azure, Kubernetes, PyTorch, LangChain, Hugging Face, Linux.
+
 ### Phase 5: automation (half a day)
 - GitHub Actions: cron 06:00 Europe/Zurich (cron is UTC: `0 4 * * *` summer / `0 5 * * *` winter, or just pick one), runs ingest + pipeline, commits SQLite + log.
 - Secrets: ANTHROPIC_API_KEY, ADZUNA_APP_ID/KEY, RAPIDAPI_KEY.

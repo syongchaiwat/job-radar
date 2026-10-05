@@ -31,6 +31,7 @@ class Job(SQLModel, table=True):
     forced_theme: Optional[str] = None  # user override: screening skips classify_theme and uses this instead
     description_breakdown: Optional[str] = None  # JSON-encoded DescriptionBreakdown, computed lazily on first Job Detail view
     description_breakdown_computed_at: Optional[datetime] = None
+    cv_version_id: Optional[int] = None  # CV library choice for this job; None = latest CV of its archetype
     market_data: bool = False  # user switch: this posting shapes archetypes and market stats (independent of application status)
 
 
@@ -249,6 +250,33 @@ class MarketTodo(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+class CVVersion(SQLModel, table=True):
+    """CV library: one CV per archetype (versioned), built from the archetype's
+    market brief and reused across its jobs. Hashes drive the 'outdated' badge."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    archetype_id: int = Field(foreign_key="archetype.id", index=True)
+    archetype_slug: str = Field(index=True)
+    draft_markdown: str
+    attempt_count: int = 0
+    verdict: str = "revise"
+    relevance_score: Optional[int] = None
+    honesty_score: Optional[int] = None
+    impact_score: Optional[int] = None
+    clarity_score: Optional[int] = None
+    keyword_alignment_score: Optional[int] = None
+    overall_feedback: Optional[str] = None
+    unresolved_gaps: str = "[]"
+    source_job_ids: str = "[]"  # market-data members the brief was built from
+    market_hash: str = ""
+    profile_hash: str = ""
+    model_used: Optional[str] = None  # "manual-edit" for hand edits
+    tokens: Optional[int] = None
+    latency_ms: Optional[float] = None
+    file_path: Optional[str] = None
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
 def get_engine(db_path: Optional[str] = None):
     path = Path(db_path or os.environ.get("DATABASE_PATH", DEFAULT_DB_PATH))
     if not path.is_absolute():
@@ -267,6 +295,7 @@ _ADDED_COLUMNS = {
     "job": {
         "forced_theme": "VARCHAR",
         "market_data": "BOOLEAN NOT NULL DEFAULT 0",
+        "cv_version_id": "INTEGER",
     },
 }
 

@@ -16,6 +16,7 @@ Courses are not projects -- no methodology or results, just the course name and 
 {theme_profile}
 
 ## Job posting
+{target_note}
 Title: {job_title}
 Company: {job_company}
 Location: {job_location}

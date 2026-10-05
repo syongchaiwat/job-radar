@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}CV library · job-radar{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div>
+    <h1 class="text-3xl font-bold">CV library</h1>
+    <p class="text-gray-400 text-sm mt-1">One CV per archetype, built from its market brief (every market-data job in it, all lanes) and reused for each of its jobs. A job's PDF adds a one-line lane sentence (e.g. part-time availability). Generating never happens on its own.</p>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for c in cards %}
+    {% set a = c.archetype %}{% set cv = c.latest %}
+    <div class="border rounded-lg p-4 space-y-2 min-w-0 {% if c.status.outdated %}border-amber-700/70{% elif cv %}border-accent/40{% else %}border-gray-800{% endif %}">
+      <a href="/cvs/{{ a.id }}" class="font-semibold hover:underline">{{ a.name }}</a>
+      <p class="text-xs text-gray-500">{{ c.row.n }} market-data jobs · {{ jobs_per_arch.get(a.id, 0) }} jobs use this archetype</p>
+      {% if c.running and not c.running.error %}
+        <p class="text-sm text-accent animate-pulse">Generating… (2-3 minutes)</p>
+      {% elif cv %}
+        <div class="flex flex-wrap gap-1 text-xs">
+          <span class="border rounded-full px-2 {% if cv.verdict == 'approve' %}border-accent/50 text-accent{% else %}border-gray-600 text-gray-400{% endif %}">{{ cv.verdict }}</span>
+          <span class="border border-gray-700 rounded-full px-2 text-gray-400">v{{ c.n_versions }}</span>
+          {% if cv.model_used == 'manual-edit' %}<span class="border border-amber-600 text-amber-300 rounded-full px-2">edited by you</span>{% endif %}
+          <span class="text-gray-500">{{ cv.created_at | relative_time }}</span>
+        </div>
+        {% if c.status.outdated %}<p class="text-xs text-amber-300">Outdated: {{ c.status.reasons | join('; ') }}</p>{% endif %}
+      {% else %}
+        <p class="text-sm text-gray-500">No CV yet.</p>
+      {% endif %}
+      {% if c.running and c.running.error %}<p class="text-xs text-red-300">Last attempt failed: {{ c.running.error[:200] }}</p>{% endif %}
+      <div class="flex flex-wrap gap-3 pt-1 text-sm items-center">
+        {% if not (c.running and not c.running.error) %}
+        <form method="post" action="/cvs/{{ a.id }}/generate">{% if cv %}<input type="hidden" name="seed_id" value="{{ cv.id }}">{% endif %}
+          <button class="border border-accent text-accent rounded px-3 py-1 hover:bg-accent/10" {% if c.row.n == 0 %}disabled title="No market-data jobs in this archetype"{% endif %}>{{ 'Regenerate' if cv else 'Generate' }}</button></form>
+        {% endif %}
+        {% if cv %}<a href="/cvs/{{ a.id }}" class="text-accent hover:underline">Open</a><a href="/cvs/version/{{ cv.id }}/pdf" class="text-accent hover:underline">PDF</a>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% if cards | selectattr('running') | list %}<div hx-get="/cvs" hx-trigger="every 6s" hx-select="main" hx-target="main" hx-swap="outerHTML"></div>{% endif %}
+{% endblock %}
