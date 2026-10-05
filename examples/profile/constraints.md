@@ -8,10 +8,8 @@ description: Hard constraints and target lanes for job matching. The matcher che
 ## Timeline
 - MSc studies until mid-2027, thesis in the final semester.
 
-## Target lanes (a job matches if it fits ANY lane)
-1. **Part-time now**: working student / part-time role, max 40% during the semester.
-2. **Industry master's thesis**: starting in the final semester.
-3. **Full-time after graduation**: from mid-2027.
+## Target lanes
+Defined in `lanes.md`; job-radar appends it to this file when screening.
 
 ## Hard constraints
 - Location: Zurich area preferred, remote within Switzerland acceptable.

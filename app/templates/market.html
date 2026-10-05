@@ -8,6 +8,17 @@
       {% if overview.set %}Archetype set v{{ overview.set.version }}{% if overview.set.version == 0 %} (the legacy themes: confirm a rework on the <a href="/classify" class="underline">Classify</a> page for learned archetypes){% endif %}.{% endif %}</p>
   </div>
 
+  <div class="grid grid-cols-2 gap-3 -mt-2">
+    <div class="border border-gray-800 rounded-lg px-4 py-3">
+      <p class="text-xs uppercase tracking-wide text-gray-500">Days to graduation</p>
+      <p class="text-2xl font-bold">{{ days_to_graduation }}</p>
+    </div>
+    <div class="border border-gray-800 rounded-lg px-4 py-3" title="6-month job-search permit after graduation (Art. 21 Abs. 3 FNIA); see constraints.md">
+      <p class="text-xs uppercase tracking-wide text-gray-500">Days to L-permit deadline</p>
+      <p class="text-2xl font-bold">{{ days_to_permit_deadline }}</p>
+    </div>
+  </div>
+
   {% if request.query_params.get('exported') %}<div class="border border-green-700 rounded p-3 text-sm text-green-300">Archetype notes (with strengths and gaps) written to <code>generated/archetypes/</code> in your profile source.</div>{% endif %}
   {% if rows %}
   <form method="post" action="/market/export-notes" class="-mt-3"><button class="text-xs text-gray-400 hover:text-gray-200 underline">Write archetype notes with strengths and gaps to the vault</button></form>

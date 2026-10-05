@@ -24,7 +24,10 @@ def load_filters() -> str:
 
 
 def load_constraints() -> str:
-    return (PROFILE_DIR / "constraints.md").read_text()
+    """constraints.md plus lanes.md (the lanes live only there)."""
+    text = (PROFILE_DIR / "constraints.md").read_text()
+    lanes = PROFILE_DIR / "lanes.md"
+    return text + ("\n\n" + lanes.read_text() if lanes.exists() else "")
 
 
 def load_projects() -> str:

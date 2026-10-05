@@ -1,7 +1,7 @@
 """Market page: GET /market, POST /market/suggest/{archetype_id}, POST /market/todo,
 POST /market/todo/{id}/toggle, POST /market/todo/{id}/delete, POST /market/evidence/remove"""
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -17,6 +17,10 @@ from src.pipeline.schemas import NextSteps
 
 router = APIRouter()
 
+# Graduation and the end of the 6-month job-search permit (Art. 21 Abs. 3 FNIA), see constraints.md
+GRADUATION = date(2027, 6, 30)
+PERMIT_DEADLINE = date(2027, 12, 31)
+
 
 @router.get("/market")
 def market_page(request: Request, a: str | None = None, session: Session = Depends(get_session)):
@@ -31,7 +35,9 @@ def market_page(request: Request, a: str | None = None, session: Session = Depen
     return templates.TemplateResponse(
         request=request, name="market.html",
         context={"overview": overview, "rows": rows, "current": current, "suggestion": suggestion,
-                 "suggestion_row": session.get(MarketSuggestion, current["archetype"].id) if current else None, "todos": todos},
+                 "suggestion_row": session.get(MarketSuggestion, current["archetype"].id) if current else None, "todos": todos,
+                 "days_to_graduation": (GRADUATION - date.today()).days,
+                 "days_to_permit_deadline": (PERMIT_DEADLINE - date.today()).days},
     )
 
 
