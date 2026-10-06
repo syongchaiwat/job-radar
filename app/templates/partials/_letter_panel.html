@@ -23,7 +23,7 @@
   <div x-show="!editing" class="bg-gray-900/60 rounded p-5"><textarea hidden data-markdown-src>{{ letter.body_markdown }}</textarea><div data-markdown class="prose prose-invert prose-sm max-w-none"></div></div>
   {% if letter.feedback %}<details><summary class="text-sm text-gray-400 cursor-pointer">Critique feedback</summary><p class="text-sm text-gray-400 mt-2 pl-4">{{ letter.feedback }}</p></details>{% endif %}
   {% else %}
-  <p class="text-sm text-gray-400">{% if job_cv %}Written from the posting, the {{ job_cv_archetype.name if job_cv_archetype else '' }} CV and your project database; English; checked for honesty, relevance, specificity and tone.{% else %}Needs a CV first: generate this job's archetype CV in the CV library.{% endif %}</p>
+  <p class="text-sm text-gray-400">{% if edited_cv or job_cv %}Written from the posting, {% if edited_cv %}this job's edited CV{% else %}the {{ job_cv_archetype.name if job_cv_archetype else '' }} CV{% endif %} and your project database; English; checked for honesty, relevance, specificity and tone.{% else %}Needs a CV first: generate this job's archetype CV in the CV library.{% endif %}</p>
   <form method="post" action="/jobs/{{ job.id }}/letter" x-data="{ w: false }" @submit="w = true">
     <button :disabled="w" class="border border-accent text-accent rounded px-4 py-1.5 text-sm hover:bg-accent/10 disabled:opacity-50"><span x-show="!w">Write cover letter</span><span x-show="w" x-cloak class="animate-pulse">Writing… (about a minute)</span></button>
   </form>

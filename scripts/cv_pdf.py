@@ -1,8 +1,8 @@
-"""Render a CV draft (.md) to a styled A4 PDF next to it.
+"""Render a Markdown CV to a styled A4 PDF next to it.
 
 Usage:
-    python scripts/cv_pdf.py cv_drafts/<draft>.md            # writes cv_drafts/<draft>.pdf
-    python scripts/cv_pdf.py cv_drafts/<draft>.md --html     # also writes the HTML, for tweaking the CSS
+    python scripts/cv_pdf.py <cv>.md            # writes <cv>.pdf
+    python scripts/cv_pdf.py <cv>.md --html     # also writes the HTML, for tweaking the CSS
 
 Layout rules live in src/cv/style.css. Photo: cv_profile/photo.jpg (optional, gitignored).
 """

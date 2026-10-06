@@ -7,7 +7,7 @@ import re
 from sqlmodel import Session, select
 
 from src.cv import library
-from src.db import CoverLetter, CVDraft, Job
+from src.db import CoverLetter, Job
 from src.lanes.core import lane_by_key
 from src.profile import context as pc
 from src.llm.call import call, load_prompt, truncate
@@ -24,12 +24,8 @@ def _norm(t: str) -> str:
 
 
 def cv_for_letter(session: Session, job: Job) -> tuple[str, str] | None:
-    """(markdown, ref): the library CV with the lane line, else the latest per-job CV."""
-    cv = library.cv_for_job(session, job)
-    if cv:
-        return library.apply_lane_slot(cv.draft_markdown, library.lane_slot(session, job)), f"library:{cv.id}"
-    d = session.exec(select(CVDraft).where(CVDraft.job_id == job.id).order_by(CVDraft.id.desc())).first()
-    return (d.draft_markdown, f"job:{d.id}") if d else None
+    """(markdown, ref): the CV this job sends (its edited copy, else the library CV with the lane line)."""
+    return library.effective_cv(session, job)
 
 
 HYPE = ("thrilled", "passionate", "excited to", "i'd welcome", "leverage", "at scale", "maps directly",

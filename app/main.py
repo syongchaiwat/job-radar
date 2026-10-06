@@ -18,7 +18,7 @@ from src.db import get_engine, init_db  # noqa: E402
 app = FastAPI(title="job-radar")
 
 # Only CLI scripts called init_db() before this -- a server started fresh
-# against a DB missing a newer table (e.g. cv_draft) would otherwise 500 on
+# against a DB missing a newer table (e.g. jobcv) would otherwise 500 on
 # first use instead of creating it.
 init_db(get_engine())
 

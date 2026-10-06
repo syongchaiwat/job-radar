@@ -47,7 +47,7 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
                 "status": row["tracking"].status if row["tracking"] else "new",
                 "first_seen": row["job"].first_seen.isoformat(),
                 "match_level": row["screening"].match_level if row["screening"] else None,
-                "cv_verdict": row["cv_draft"].verdict if row["cv_draft"] else None,
+                "own_cv": row["own_cv"],
                 "market_data": bool(row["job"].market_data),
                 "priority": row["priority"],
                 "lane": row["job"].lane or "none",

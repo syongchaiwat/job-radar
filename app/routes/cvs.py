@@ -1,13 +1,14 @@
 """CV library: GET /cvs, GET /cvs/{archetype_id}, POST /cvs/{archetype_id}/generate,
 GET /cvs/{archetype_id}/status, POST /cvs/version/{cv_id}/edit, GET /cvs/version/{cv_id}/pdf,
-POST /jobs/{job_id}/cvlib, GET /jobs/{job_id}/cvlib/pdf"""
+POST /jobs/{job_id}/cvlib, GET /jobs/{job_id}/cv/preview, POST /jobs/{job_id}/cv/edit,
+POST /jobs/{job_id}/cv/reset, POST /jobs/{job_id}/cv/restore, GET /jobs/{job_id}/cv/pdf"""
 import json
 import tempfile
 import threading
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from sqlmodel import Session, select
 
 from app.deps import get_session
@@ -115,21 +116,75 @@ def version_pdf(cv_id: int, session: Session = Depends(get_session)):
 
 @router.post("/jobs/{job_id}/cvlib")
 def choose_cv(job_id: str, session: Session = Depends(get_session), cv_version_id: str = Form("")):
-    """Which library CV this job uses ('' = follow the latest CV of its archetype)."""
+    """Which library CV this job uses ('' = follow the latest CV of its archetype). If the job has an
+    edited copy, this starts over from the chosen CV (the edited versions stay as history)."""
     job = session.get(Job, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     job.cv_version_id = int(cv_version_id) if cv_version_id else None
     session.add(job)
+    library.reset_job_cv(session, job_id)
     session.commit()
     return RedirectResponse(f"/jobs/{job_id}#cv-library", status_code=303)
 
 
-@router.get("/jobs/{job_id}/cvlib/pdf")
-def job_cv_pdf(job_id: str, session: Session = Depends(get_session)):
+@router.get("/jobs/{job_id}/cv/preview")
+def preview_job_cv(job_id: str, pick: str = "", cv_version_id: str = "", job_cv_id: str = "", session: Session = Depends(get_session)):
+    """Markdown of a candidate CV for this job, without changing anything: the last saved copy
+    (pick=saved, job_cv_id = one of its versions, default the newest) or a library version with the job's lane line ('' = latest of the job's archetype)."""
     job = session.get(Job, job_id)
-    cv = library.cv_for_job(session, job) if job else None
-    if cv is None:
-        raise HTTPException(status_code=404, detail="No library CV for this job")
-    markdown = library.apply_lane_slot(cv.draft_markdown, library.lane_slot(session, job))
-    return _pdf_response(markdown, f"CV_{job.company or 'job'}_{cv.archetype_slug}.pdf".replace(" ", "_"))
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if pick == "saved":
+        rows = library.job_cv_versions(session, job_id)
+        row = next((r for r in rows if str(r.id) == job_cv_id), None) if job_cv_id else (rows[0] if rows else None)
+        return JSONResponse({"markdown": row.markdown if row else ""})
+    if cv_version_id:
+        cv = session.get(CVVersion, int(cv_version_id))
+    else:
+        a = library.primary_archetype(session, job_id)
+        vs = library.versions(session, a.slug) if a else []
+        cv = vs[-1] if vs else None
+    md = library.apply_lane_slot(cv.draft_markdown, library.lane_slot(session, job)) if cv else ""
+    return JSONResponse({"markdown": md})
+
+
+@router.post("/jobs/{job_id}/cv/restore")
+def restore_job_cv(job_id: str, session: Session = Depends(get_session), job_cv_id: str = Form("")):
+    """Use one of this job's saved CVs again (default: the newest)."""
+    library.restore_job_cv(session, job_id, int(job_cv_id) if job_cv_id else None)
+    session.commit()
+    return RedirectResponse(f"/jobs/{job_id}#cv-library", status_code=303)
+
+
+@router.post("/jobs/{job_id}/cv/edit")
+def edit_job_cv(job_id: str, session: Session = Depends(get_session), markdown: str = Form(...), base_cv_version_id: str = Form("")):
+    """Save an edit of this job's CV (a new version for this job only; the library CV is untouched)."""
+    job = session.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    current = library.effective_cv(session, job)
+    if current is None or markdown.replace("\r\n", "\n").strip() != current[0].strip():
+        edited = library.job_cv(session, job_id)
+        base = int(base_cv_version_id) if base_cv_version_id else (edited.base_cv_version_id if edited else None)
+        library.save_job_cv(session, job, markdown, base)
+        session.commit()
+    return RedirectResponse(f"/jobs/{job_id}#cv-library", status_code=303)
+
+
+@router.post("/jobs/{job_id}/cv/reset")
+def reset_job_cv(job_id: str, session: Session = Depends(get_session)):
+    """Back to the library CV; the edited versions stay in the database as history."""
+    library.reset_job_cv(session, job_id)
+    session.commit()
+    return RedirectResponse(f"/jobs/{job_id}#cv-library", status_code=303)
+
+
+@router.get("/jobs/{job_id}/cv/pdf")
+def job_cv_pdf(job_id: str, session: Session = Depends(get_session)):
+    """PDF of what this job sends: its edited CV, else the library CV with the lane line."""
+    job = session.get(Job, job_id)
+    current = library.effective_cv(session, job) if job else None
+    if current is None:
+        raise HTTPException(status_code=404, detail="No CV for this job yet")
+    return _pdf_response(current[0], f"CV_{job.company or 'job'}.pdf".replace(" ", "_").replace("/", "-"))

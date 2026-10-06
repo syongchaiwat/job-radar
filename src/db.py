@@ -77,32 +77,17 @@ class Tracking(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=_utcnow)
 
 
-class CVDraft(SQLModel, table=True):
-    """CV draft/critique pipeline output for a job. One row per generation
-    run (fresh 'Prepare CV' or seeded 'Regenerate') -- job_id has no unique
-    constraint, mirroring Screening, so history is preserved and a
-    regenerate can always seed from the latest row for that job."""
+class JobCV(SQLModel, table=True):
+    """A CV edited for one job, starting from a library CV. Each save is a new
+    row (history); the latest non-discarded row is the job's CV. Never touches
+    the library CV or other jobs."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    job_id: str = Field(foreign_key="job.id")
-    archetype_slug: str
-    draft_markdown: str
-    attempt_count: int
-    verdict: str  # "approve" | "revise" -- "revise" + attempt_count>=MAX_ATTEMPTS means it hit the ceiling unresolved
-    relevance_score: Optional[int] = None
-    honesty_score: Optional[int] = None
-    impact_score: Optional[int] = None
-    clarity_score: Optional[int] = None
-    keyword_alignment_score: Optional[int] = None
-    overall_feedback: Optional[str] = None
-    unresolved_gaps: str = "[]"  # JSON-encoded list[str], matches Screening.gaps convention
-    is_regenerate: bool = False
-    file_path: Optional[str] = None  # relative path under cv_drafts/
-    model_used: Optional[str] = None
-    tokens: Optional[int] = None
-    latency_ms: Optional[float] = None
+    job_id: str = Field(foreign_key="job.id", index=True)
+    base_cv_version_id: Optional[int] = None  # library CV it started from (None: imported from the old per-job flow)
+    markdown: str
+    discarded: bool = False  # set when you go back to the library CV
     created_at: datetime = Field(default_factory=_utcnow)
-
 
 class RoleCard(SQLModel, table=True):
     """Normalized English summary of a posting: what every comparison (archetype
@@ -291,7 +276,7 @@ class CoverLetter(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     job_id: str = Field(foreign_key="job.id", index=True)
-    cv_ref: Optional[str] = None  # "library:<CVVersion id>" or "job:<CVDraft id>"
+    cv_ref: Optional[str] = None  # "library:<CVVersion id>" or "job:<JobCV id>"
     body_markdown: str
     verdict: str = "revise"
     honesty_score: Optional[int] = None

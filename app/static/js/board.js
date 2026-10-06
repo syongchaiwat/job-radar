@@ -85,7 +85,7 @@ function board() {
         case "match": return by((j) => this.rankIn(this.config.matchOrder, j.match_level));
         case "archetype": return by((j) => this.rankIn(this.config.archetypeOrder, j.archetype));
         case "status": return by((j) => this.rankIn(this.config.statusOrder, j.status));
-        case "cv": return by((j) => this.rankIn(["approve", "revise"], j.cv_verdict));
+        case "cv": return by((j) => (j.own_cv ? 0 : 1));
         default: return newest;
       }
     },

@@ -1,12 +1,10 @@
 """Job Detail page: GET /jobs/{job_id}, POST /jobs/{job_id}/tracking, POST /jobs/{job_id}/review,
-POST /jobs/{job_id}/description, GET /jobs/{job_id}/breakdown, POST /jobs/{job_id}/cv,
-POST /jobs/{job_id}/cv/regenerate, GET /jobs/{job_id}/cv/download,
-GET /jobs/{job_id}/cv/pdf,
-POST /jobs/{job_id}/cv/edit, POST /jobs/{job_id}/market-data, POST /jobs/{job_id}/archetype"""
+POST /jobs/{job_id}/description, GET /jobs/{job_id}/breakdown, POST /jobs/{job_id}/market-data,
+POST /jobs/{job_id}/archetype, POST /jobs/{job_id}/lane, POST /jobs/{job_id}/deadline, cover letters"""
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlmodel import Session
 
 from app.constants import STATUS_OPTIONS
@@ -14,10 +12,6 @@ from app.deps import get_session
 from app.services.jobs import get_job_bundle
 from app.templating import templates
 from src.enrich.breakdown import compute_breakdown
-from src.cv.export import CV_DRAFTS_DIR, REPO_ROOT
-from src.cv.graph import MAX_ATTEMPTS
-from src.cv.pdf import markdown_to_pdf
-from src.cv.run import generate_cv, save_manual_edit
 from src.screening.run import archetype_text, screen_job
 from src.llm.schemas import DescriptionBreakdown
 
@@ -35,7 +29,6 @@ def job_detail(job_id: str, request: Request, session: Session = Depends(get_ses
         context={
             **bundle,
             "status_options": STATUS_OPTIONS,
-            "max_attempts": MAX_ATTEMPTS,
         },
     )
 
@@ -124,88 +117,6 @@ def job_breakdown(job_id: str, request: Request, session: Session = Depends(get_
         request=request,
         name="partials/_breakdown.html",
         context={"job": job, "breakdown": breakdown, "is_truncated": job.source == "adzuna"},
-    )
-
-
-@router.post("/jobs/{job_id}/cv")
-def prepare_cv(job_id: str, request: Request, session: Session = Depends(get_session)):
-    bundle = get_job_bundle(session, job_id)
-    if bundle is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    if not bundle["archetype_primary"]:
-        raise HTTPException(status_code=400, detail="Job has no archetype; assign one first.")
-    session.add(generate_cv(session, bundle["job"]))
-    session.commit()
-    bundle = get_job_bundle(session, job_id)
-    return templates.TemplateResponse(
-        request=request, name="partials/_cv_panel.html", context={**bundle, "max_attempts": MAX_ATTEMPTS}
-    )
-
-
-@router.post("/jobs/{job_id}/cv/regenerate")
-def regenerate_cv(job_id: str, request: Request, session: Session = Depends(get_session)):
-    bundle = get_job_bundle(session, job_id)
-    if bundle is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    latest = bundle["cv_draft"]
-    if not bundle["archetype_primary"]:
-        raise HTTPException(status_code=400, detail="Job has no archetype; assign one first.")
-    if latest is None:
-        raise HTTPException(status_code=400, detail="No existing CV draft to regenerate from.")
-    session.add(generate_cv(session, bundle["job"], seed=latest))
-    session.commit()
-    bundle = get_job_bundle(session, job_id)
-    return templates.TemplateResponse(
-        request=request, name="partials/_cv_panel.html", context={**bundle, "max_attempts": MAX_ATTEMPTS}
-    )
-
-
-@router.get("/jobs/{job_id}/cv/download")
-def download_cv(job_id: str, session: Session = Depends(get_session)):
-    bundle = get_job_bundle(session, job_id)
-    if bundle is None or bundle["cv_draft"] is None:
-        raise HTTPException(status_code=404, detail="No CV draft for this job")
-    cv_draft = bundle["cv_draft"]
-    return PlainTextResponse(
-        cv_draft.draft_markdown,
-        media_type="text/markdown",
-        headers={"Content-Disposition": f'attachment; filename="{job_id}_v{cv_draft.id}.md"'},
-    )
-
-
-@router.get("/jobs/{job_id}/cv/pdf")
-def download_cv_pdf(job_id: str, session: Session = Depends(get_session)):
-    """Latest draft rendered with src/cv/style.css, written next to its .md in cv_drafts/."""
-    bundle = get_job_bundle(session, job_id)
-    if bundle is None or bundle["cv_draft"] is None:
-        raise HTTPException(status_code=404, detail="No CV draft for this job")
-    cv_draft = bundle["cv_draft"]
-    pdf_path = (
-        (REPO_ROOT / cv_draft.file_path).with_suffix(".pdf")
-        if cv_draft.file_path
-        else CV_DRAFTS_DIR / f"{job_id}_v{cv_draft.id}.pdf"
-    )
-    pdf_path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        markdown_to_pdf(cv_draft.draft_markdown, pdf_path)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=500, detail=f"PDF rendering failed: {exc}")
-    return FileResponse(pdf_path, media_type="application/pdf", filename=f"CV_{job_id}_v{cv_draft.id}.pdf")
-
-
-@router.post("/jobs/{job_id}/cv/edit")
-def edit_cv(job_id: str, request: Request, session: Session = Depends(get_session), markdown: str = Form(...)):
-    """Save a hand-edited CV as a new version; Download PDF then renders it."""
-    bundle = get_job_bundle(session, job_id)
-    if bundle is None or bundle["cv_draft"] is None:
-        raise HTTPException(status_code=404, detail="No CV draft for this job")
-    markdown = markdown.replace("\r\n", "\n").strip() + "\n"
-    if markdown.strip() != bundle["cv_draft"].draft_markdown.strip():
-        session.add(save_manual_edit(session, bundle["job"], bundle["cv_draft"], markdown))
-        session.commit()
-        bundle = get_job_bundle(session, job_id)
-    return templates.TemplateResponse(
-        request=request, name="partials/_cv_panel.html", context={**bundle, "max_attempts": MAX_ATTEMPTS}
     )
 
 

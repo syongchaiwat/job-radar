@@ -10,8 +10,8 @@ Built and used daily as a real tool, not a demo. The repo ships with a **fiction
 - **Screen:** a 5-node LangGraph pipeline per job: normalize → card blurb → filter gate → score match → extract gaps, judged against the project database and coursework. A cheap model for filtering, a stronger model for match and gaps, a short-circuit to save tokens on excluded jobs.
 - **Structure the market:** a role card per job (English summary, canonical skills, timeline signals), local embeddings, and archetypes learned from postings you mark as market data. New jobs are assigned by embeddings first, the LLM only when unsure.
 - **Triage:** FastAPI + HTMX dashboard. A review queue (unreviewed first), priority ranking, sorting and filters, add-a-job-by-URL, archive/shortlist.
-- **Draft CVs:** a second LangGraph with a real cycle, `draft_cv ⇄ critique_cv`, up to 3 rounds. The drafter selects and phrases entries from a tagged project database per job; the critic fact-checks every claim against the sources and scores relevance, honesty, impact, clarity and keyword fit.
-- **Export:** edit the CV by hand (saved as a new version), then render it to a styled A4 PDF.
+- **CV library:** one CV per archetype, built by a second LangGraph with a real cycle, `draft_cv ⇄ critique_cv`, up to 3 rounds. The drafter selects and phrases entries from a tagged project database; the critic fact-checks every claim against the sources and scores relevance, honesty, impact, clarity and keyword fit.
+- **Per job:** pick a library CV, edit a copy for that job only (saved as versions, the library stays untouched), render a styled A4 PDF, and draft a cover letter from it.
 
 ## Archetypes
 
@@ -79,15 +79,13 @@ Mark postings worth learning from as **market data** (◇ on each card, or **Sel
 
 **Market** (Phase 3): per archetype, which skills its market-data jobs ask for, your profile coverage, strengths (with the projects/courses that prove them) and gaps, plus LLM next-step suggestions and a to-do list.
 
-**CV library** (Phase 4): one CV per archetype, generated from its market brief and reused for every job in it. The library flags a CV as outdated when new market-data jobs arrive or your profile changes; a job's PDF adds a one-line lane sentence (e.g. part-time availability). You can still tailor a CV to a single job.
+**CV library** (Phase 4): one CV per archetype, generated from its market brief and reused for every job in it. The library flags a CV as outdated when new market-data jobs arrive or your profile changes; a job's PDF adds a one-line lane sentence (e.g. part-time availability).
 
 **Lanes, ranking and cover letters** (Phase 5): `profile/lanes.md` defines your application lanes (e.g. working student, thesis internship, summer internship, full-time). Each job gets a lane, an eligibility check and a lane-value score; the board ranks by priority = fit × lane value × urgency (deadline). On a job's page, **Write cover letter** drafts an English letter grounded in the job's CV and your projects, critiqued for honesty, relevance, specificity and tone; edit it and download a one-page PDF. Backfill: `python scripts/assess_lanes.py --missing`.
 
 **Review and correct:** on a job's page, **Archive** or **Shortlist**, set its archetype or lane by hand if the automatic one is wrong. A wrong description can be replaced and re-screened from the same page.
 
-**Tailor a CV to one job:** **Prepare CV** on the job page (framed by the job's archetype), or `python -m src.cv.run --job-id <id>` (`--regenerate` revises the latest draft). Drafts land in `cv_drafts/` with the verdict, rubric scores, feedback and unresolved gaps. When a gap is something the candidate really has, add it to the profile source, sync, and regenerate. Always read a generated CV before sending it.
-
-**Edit and export:** **Edit** opens the Markdown (saving creates a new version); **Download PDF** renders the latest version with `src/cv/style.css`, tightening spacing to fit two pages before ever spilling onto a third. CLI: `python scripts/cv_pdf.py cv_drafts/<draft>.md`.
+**A CV for one job:** the job page's **CV** panel uses the latest library CV of the job's archetype (or any library version you pick), with the lane line added. **Edit for this job** opens it as Markdown; saving stores a copy for that job only, as versions, and never changes the library CV or other jobs. **Go back to the library CV** drops the copy (its versions stay as history). **Download PDF** renders what the job sends with `src/cv/style.css`, tightening spacing to fit two pages before spilling onto a third. CLI for any Markdown CV: `python scripts/cv_pdf.py <cv>.md`. Always read a CV before sending it.
 
 ## Repository layout
 
@@ -120,12 +118,13 @@ ingest: manual (URL auto-fetch) + Adzuna / SerpApi / JSearch (archetype keywords
   -> lanes: detection + eligibility + value -> priority
   -> SQLite (jobs, role cards, archetypes, screenings, tracking, CVs, letters)
   -> FastAPI + Jinja2 + HTMX + Alpine.js dashboard: board / job detail / classify / market / CV library / skills
-  -> on demand, "Prepare CV": CV LangGraph (Sonnet drafts, Opus critiques)
+  -> CV library, per archetype: CV LangGraph (Sonnet drafts, Opus critiques)
        draft_cv --> critique_cv --(revise, attempts < 3)--> draft_cv
                          |
                   (approve, or 3 attempts)
                          v
-       CVDraft version -> manual edit -> styled HTML -> headless Chrome -> A4 PDF
+       CVVersion -> per job: library CV + lane line -> optional edited copy (JobCV)
+                 -> styled HTML -> headless Chrome -> A4 PDF; cover letter drafted from it
 ```
 
 ## Eval

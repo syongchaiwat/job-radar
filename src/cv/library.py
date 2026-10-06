@@ -3,7 +3,9 @@
 - market_brief(): the archetype as a "posting" for the existing draft/critique loop
 - generate(): runs the loop (all CV guardrails apply) and stores a CVVersion
 - status(): outdated detection (new market-data jobs since the build, profile changed)
-- cv_for_job() / apply_lane_slot(): which CV a job uses, plus its lane sentence
+- cv_for_job() / apply_lane_slot(): which library CV a job uses, plus its lane sentence
+- job_cv() / save_job_cv() / reset_job_cv() / restore_job_cv(): a copy edited for one job (never touches the library)
+- effective_cv(): what a job actually sends (its edited copy, else the library CV + lane sentence)
 """
 import hashlib
 import json
@@ -14,13 +16,24 @@ from pathlib import Path
 
 from sqlmodel import Session, select
 
-from src.db import Archetype, ArchetypeSet, CVVersion, Job, JobArchetype, RoleCard
+from src.cv.graph import build_cv_graph
+from src.db import Archetype, ArchetypeSet, CVVersion, Job, JobArchetype, JobCV, RoleCard
 from src.market.stats import market_overview
 from src.profile import context as pc
-from src.cv.export import CV_DRAFTS_DIR, REPO_ROOT
 from src.llm.schemas import CVDraftState
 
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+CV_DRAFTS_DIR = REPO_ROOT / "cv_drafts"  # Markdown exports of library CVs (gitignored: real contact details)
 MANUAL_EDIT = "manual-edit"
+GRAPH = build_cv_graph()
+_TEMPLATE_METADATA = re.compile(r"\s*·\s*source:\s*[^\s*]+|<!--.*?-->", re.DOTALL)
+
+
+def _strip_template_metadata(markdown: str) -> str:
+    """Template source tags and HTML comments are prompt-side metadata the model
+    sometimes copies through; course grades too. Strip deterministically."""
+    return pc.strip_grades(_TEMPLATE_METADATA.sub("", markdown))
+
 TEMPLATE = REPO_ROOT / "cv_profile" / "cv_template.md"
 
 # Fallback lane sentences when a job has no lane from lanes.md yet. Keyed by the
@@ -114,8 +127,6 @@ def _next_file(archetype: Archetype, cv: CVVersion, session: Session) -> str:
 
 
 def generate(session: Session, archetype_id: int, seed: CVVersion | None = None) -> CVVersion:
-    from src.cv.run import GRAPH, _strip_template_metadata
-
     archetype = session.get(Archetype, archetype_id)
     row = _row_for(session, archetype_id, refresh_evidence=True)
     if archetype is None or row is None:
@@ -236,3 +247,65 @@ def apply_lane_slot(markdown: str, slot: str) -> str:
     if slot in para:
         return markdown
     return markdown[:start] + para + " " + slot + markdown[start + len(para):]
+
+
+def job_cv(session: Session, job_id: str) -> JobCV | None:
+    """The job's own edited CV (latest save), unless you went back to the library CV."""
+    return session.exec(select(JobCV).where(JobCV.job_id == job_id, JobCV.discarded == False)  # noqa: E712
+                        .order_by(JobCV.id.desc())).first()
+
+
+def library_markdown(session: Session, job: Job) -> tuple[CVVersion | None, str]:
+    """The library CV this job would use, with its lane sentence."""
+    cv = cv_for_job(session, job)
+    return cv, (apply_lane_slot(cv.draft_markdown, lane_slot(session, job)) if cv else "")
+
+
+def save_job_cv(session: Session, job: Job, markdown: str, base_cv_version_id: int | None) -> JobCV:
+    """Save an edit for this job only, as a new version. Caller commits."""
+    row = JobCV(job_id=job.id, base_cv_version_id=base_cv_version_id, markdown=markdown.replace("\r\n", "\n").strip() + "\n")
+    session.add(row)
+    return row
+
+
+def reset_job_cv(session: Session, job_id: str) -> None:
+    """Go back to the library CV; the edited versions stay as history. Caller commits."""
+    for row in session.exec(select(JobCV).where(JobCV.job_id == job_id, JobCV.discarded == False)).all():  # noqa: E712
+        row.discarded = True
+        session.add(row)
+
+
+def last_saved_job_cv(session: Session, job_id: str) -> JobCV | None:
+    """The job's most recent save, in use or not."""
+    return session.exec(select(JobCV).where(JobCV.job_id == job_id).order_by(JobCV.id.desc())).first()
+
+
+def job_cv_versions(session: Session, job_id: str) -> list[JobCV]:
+    """Every save for this job, newest first (in use or not)."""
+    return session.exec(select(JobCV).where(JobCV.job_id == job_id).order_by(JobCV.id.desc())).all()
+
+
+def restore_job_cv(session: Session, job_id: str, job_cv_id: int | None = None) -> JobCV | None:
+    """Use one of the job's saved CVs again (default: the last one). The newest save is
+    simply re-activated; an older one comes back as a new version, so history stays intact.
+    Caller commits."""
+    rows = job_cv_versions(session, job_id)
+    row = next((r for r in rows if r.id == job_cv_id), None) if job_cv_id else (rows[0] if rows else None)
+    if row is None:
+        return None
+    if row.id == rows[0].id:
+        row.discarded = False
+        session.add(row)
+        return row
+    copy = JobCV(job_id=job_id, base_cv_version_id=row.base_cv_version_id, markdown=row.markdown)
+    session.add(copy)
+    return copy
+
+
+def effective_cv(session: Session, job: Job) -> tuple[str, str] | None:
+    """(markdown, ref) of what this job sends: its edited copy, else the library CV with the lane line."""
+    edited = job_cv(session, job.id)
+    if edited:
+        return edited.markdown, f"job:{edited.id}"
+    cv, md = library_markdown(session, job)
+    return (md, f"library:{cv.id}") if cv else None

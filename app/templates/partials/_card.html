@@ -26,8 +26,8 @@
     {% endif %}
     {% if row.lane_name %}<span class="text-xs border border-gray-700 text-gray-300 rounded-full px-2 py-0.5">{{ row.lane_name }}</span>{% endif %}
     {% if row.eligible == 'no' %}<span class="text-xs border border-amber-700 text-amber-300 rounded-full px-2 py-0.5">not eligible</span>{% endif %}
-    {% if row.cv_draft %}
-    <span class="text-xs border border-gray-700 text-gray-300 rounded-full px-2 py-0.5">CV · {{ row.cv_draft.verdict }}</span>
+    {% if row.own_cv %}
+    <span class="text-xs border border-gray-700 text-gray-300 rounded-full px-2 py-0.5">CV · edited for this job</span>
     {% endif %}
   </div>
   {% if row.screening and row.screening.blurb %}

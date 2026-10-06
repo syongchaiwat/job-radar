@@ -7,7 +7,7 @@ duplicate/stale cards the moment a job gets re-screened.
 """
 from sqlmodel import Session, select
 
-from src.db import Archetype, ArchetypeSet, CVDraft, GroundTruth, Job, JobArchetype, JobSkill, RoleCard, Screening, Skill, Tracking
+from src.db import Archetype, ArchetypeSet, GroundTruth, JobCV, Job, JobArchetype, JobSkill, RoleCard, Screening, Skill, Tracking
 
 
 def _ensure_tracking(session: Session, job_id: str) -> Tracking:
@@ -37,11 +37,8 @@ def _latest_screening_by_job(session: Session) -> dict[str, Screening]:
     return latest
 
 
-def _latest_cv_by_job(session: Session) -> dict[str, CVDraft]:
-    latest: dict[str, CVDraft] = {}
-    for cv in session.exec(select(CVDraft).order_by(CVDraft.created_at)).all():
-        latest[cv.job_id] = cv
-    return latest
+def _jobs_with_own_cv(session: Session) -> set[str]:
+    return set(session.exec(select(JobCV.job_id).where(JobCV.discarded == False)).all())  # noqa: E712
 
 
 def list_board_rows(session: Session) -> list[dict]:
@@ -49,14 +46,14 @@ def list_board_rows(session: Session) -> list[dict]:
     jobs = session.exec(select(Job)).all()
     screenings = _latest_screening_by_job(session)
     trackings = {t.job_id: t for t in session.exec(select(Tracking)).all()}
-    cvs = _latest_cv_by_job(session)
+    own_cv = _jobs_with_own_cv(session)
 
     return [
         {
             "job": job,
             "screening": screenings.get(job.id),
             "tracking": trackings.get(job.id),
-            "cv_draft": cvs.get(job.id),
+            "own_cv": job.id in own_cv,
         }
         for job in jobs
     ]
@@ -70,15 +67,10 @@ def get_job_bundle(session: Session, job_id: str) -> dict | None:
         select(Screening).where(Screening.job_id == job_id).order_by(Screening.created_at.desc())
     ).first()
     tracking = _ensure_tracking(session, job_id)
-    cv_versions = session.exec(
-        select(CVDraft).where(CVDraft.job_id == job_id).order_by(CVDraft.created_at)
-    ).all()
     return {
         "job": job,
         "screening": screening,
         "tracking": tracking,
-        "cv_draft": cv_versions[-1] if cv_versions else None,
-        "cv_versions": cv_versions,  # oldest first, so v1 = index 0
         "label": session.get(GroundTruth, job_id),
         "role_card": session.get(RoleCard, job_id),
         "breakdown": _cached_breakdown(job),
@@ -147,8 +139,10 @@ def _cvlib_bundle(session: Session, job: Job) -> dict:
     from src.cv import library
     from src.db import CVVersion
 
-    job_cv = library.cv_for_job(session, job)
+    job_cv, library_md = library.library_markdown(session, job)
     slot = library.lane_slot(session, job)
+    edited = library.job_cv(session, job.id)
+    n_edits = len(session.exec(select(JobCV).where(JobCV.job_id == job.id, JobCV.discarded == False)).all())  # noqa: E712
     latest_by_slug: dict[str, CVVersion] = {}
     for cv in session.exec(select(CVVersion).order_by(CVVersion.id)).all():
         latest_by_slug[cv.archetype_slug] = cv
@@ -157,10 +151,44 @@ def _cvlib_bundle(session: Session, job: Job) -> dict:
     return {
         "job_cv": job_cv,
         "job_cv_archetype": by_slug.get(job_cv.archetype_slug) if job_cv else None,
-        "job_cv_markdown": library.apply_lane_slot(job_cv.draft_markdown, slot) if job_cv else "",
+        "job_cv_markdown": library_md,
+        "edited_cv": edited,
+        "edited_cv_versions": n_edits,
+        "edited_cv_base": session.get(CVVersion, edited.base_cv_version_id) if edited and edited.base_cv_version_id else None,
+        "cv_picker": _cv_picker(session, by_slug, job_cv, job),
         "lane_sentence": slot,
         "job_archetype": library.primary_archetype(session, job.id),
         "library_cvs": [(cv, by_slug.get(slug)) for slug, cv in latest_by_slug.items()],
+    }
+
+
+def _cv_picker(session: Session, by_slug: dict, current, job: Job) -> dict:
+    """Library CVs grouped by archetype (newest version first) for the job page's two-step picker."""
+    from src.cv.library import primary_archetype
+    from src.db import CVVersion
+
+    groups: dict[str, dict] = {}
+    for cv in session.exec(select(CVVersion).order_by(CVVersion.id.desc())).all():
+        a = by_slug.get(cv.archetype_slug)
+        g = groups.setdefault(cv.archetype_slug, {"slug": cv.archetype_slug, "name": a.name if a else cv.archetype_slug, "versions": []})
+        g["versions"].append({"id": cv.id, "label": f"v{cv.id}{' (edited)' if cv.model_used == 'manual-edit' else ''} · {cv.created_at.strftime('%d %b')}"})
+    own = primary_archetype(session, job.id)
+    order = sorted(groups.values(), key=lambda g: (g["slug"] != (own.slug if own else None), g["name"]))
+    from src.cv.library import job_cv, job_cv_versions
+
+    saved_rows = job_cv_versions(session, job.id)
+    active = job_cv(session, job.id)
+    lib_slug = current.archetype_slug if current else (own.slug if own else (order[0]["slug"] if order else None))
+    return {
+        "job_id": job.id,
+        "groups": order,
+        "own_slug": own.slug if own else None,
+        "saved": [{"id": r.id, "label": f"v{len(saved_rows) - i} · {r.created_at.strftime('%d %b %H:%M')}"
+                   + (" · newest" if i == 0 else "")} for i, r in enumerate(saved_rows)],
+        "in_use": "saved" if active else "library",
+        "active_saved_id": str(active.id) if active else "",
+        "library_slug": lib_slug,
+        "library_id": str(job.cv_version_id or ""),
     }
 
 

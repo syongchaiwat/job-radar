@@ -1,36 +1,108 @@
-{# Job page: the archetype CV this job uses (CV library), with its lane sentence. #}
-<div id="cv-library" class="border {% if job_cv %}border-accent/40{% else %}border-gray-800{% endif %} rounded-lg p-4 space-y-3">
+{# Job page CV: pick a CV (this job's last saved copy, or a library CV by archetype + version),
+   preview it before switching, and edit a copy for this job only. #}
+{% set sent_md = edited_cv.markdown if edited_cv else job_cv_markdown %}
+<div id="cv-library" x-data='cvPanel({{ cv_picker | tojson }})' class="border {% if edited_cv or job_cv %}border-accent/40{% else %}border-gray-800{% endif %} rounded-lg p-4 space-y-3">
   <div class="flex flex-wrap items-center gap-2">
-    <p class="text-xs uppercase tracking-wide text-gray-500 mr-2">CV</p>
-    {% if job_cv %}
+    <p class="text-xs uppercase tracking-wide text-gray-500 mr-2">CV in use</p>
+    {% if edited_cv %}
+    <span class="font-semibold">Edited for this job</span>
+    <span class="text-xs border border-amber-600 text-amber-300 rounded-full px-2 py-0.5">only this job</span>
+    <span class="text-xs text-gray-500">v{{ edited_cv_versions }} · saved {{ edited_cv.created_at | relative_time }}
+      {% if edited_cv_base %} · from the {{ edited_cv_base.archetype_slug }} CV v{{ edited_cv_base.id }}{% elif not edited_cv.base_cv_version_id %} · from the old per-job flow{% endif %}</span>
+    {% elif job_cv %}
     <span class="font-semibold">{{ job_cv_archetype.name if job_cv_archetype else job_cv.archetype_slug }} CV</span>
-    <span class="text-xs border rounded-full px-2 py-0.5 {% if job_cv.verdict == 'approve' %}border-accent/50 text-accent{% else %}border-gray-600 text-gray-400{% endif %}">{{ job_cv.verdict }}</span>
-    <span class="text-xs text-gray-500">{{ job_cv.created_at | relative_time }}{% if job.cv_version_id %} · pinned for this job{% endif %}</span>
-    <span class="sm:ml-auto flex gap-3 text-sm">
-      <a href="/jobs/{{ job.id }}/cvlib/pdf" class="text-accent hover:underline">Download PDF{% if lane_sentence %} (with lane line){% endif %}</a>
-      <a href="/cvs/{{ job_cv.archetype_id }}" class="text-gray-400 hover:text-gray-200 underline">Open in library</a>
-    </span>
+    <span class="text-xs text-gray-500">library v{{ job_cv.id }} · {{ job_cv.created_at | relative_time }}{% if job.cv_version_id %} · chosen for this job{% else %} · latest of this job's archetype{% endif %}</span>
     {% elif job_archetype %}
     <span class="text-sm text-gray-400">No CV for {{ job_archetype.name }} yet.</span>
-    <a href="/cvs/{{ job_archetype.id }}" class="text-sm text-accent hover:underline sm:ml-auto">Generate it in the CV library</a>
+    <a href="/cvs/{{ job_archetype.id }}" class="text-sm text-accent hover:underline">Generate it in the CV library</a>
     {% else %}
-    <span class="text-sm text-gray-500">Assign an archetype to use a library CV.</span>
+    <span class="text-sm text-gray-500">None yet: pick one below.</span>
+    {% endif %}
+    {% if edited_cv or job_cv %}
+    <span class="sm:ml-auto flex items-center gap-3">
+      <button type="button" @click="editing = !editing" class="border border-gray-700 rounded px-3 py-1 text-sm hover:border-gray-500">
+        <span x-show="!editing">{% if edited_cv %}Edit{% else %}Edit for this job{% endif %}</span><span x-show="editing" x-cloak>Cancel edit</span></button>
+      <a href="/jobs/{{ job.id }}/cv/pdf" class="text-sm text-accent hover:underline">Download PDF</a>
+    </span>
     {% endif %}
   </div>
-  {% if lane_sentence %}<p class="text-xs text-gray-500">Lane line added to the summary for this job: <span class="text-gray-300">"{{ lane_sentence }}"</span></p>{% endif %}
-  {% if library_cvs %}
-  <form method="post" action="/jobs/{{ job.id }}/cvlib" class="flex flex-wrap items-center gap-2 text-sm">
-    <span class="text-gray-500 text-xs">Use</span>
-    <select name="cv_version_id" class="bg-gray-900 border border-gray-700 rounded px-2 py-1">
-      <option value="" {% if not job.cv_version_id %}selected{% endif %}>Latest CV of this job's archetype</option>
-      {% for cv, a in library_cvs %}<option value="{{ cv.id }}" {% if job.cv_version_id == cv.id %}selected{% endif %}>{{ a.name if a else cv.archetype_slug }} CV (latest)</option>{% endfor %}
-    </select>
-    <button class="border border-gray-700 rounded px-3 py-1 hover:border-gray-500">Set</button>
+  {% if not edited_cv and lane_sentence %}<p class="text-xs text-gray-500">Lane line added to the summary for this job: <span class="text-gray-300">"{{ lane_sentence }}"</span></p>{% endif %}
+
+  {# Editing: always the CV in use; saving makes a new version for this job only. #}
+  {% if edited_cv or job_cv %}
+  <form x-show="editing" x-cloak method="post" action="/jobs/{{ job.id }}/cv/edit" class="space-y-2">
+    <input type="hidden" name="base_cv_version_id" value="{{ edited_cv.base_cv_version_id if edited_cv and edited_cv.base_cv_version_id else (job_cv.id if job_cv else '') }}">
+    <textarea name="markdown" rows="28" class="w-full bg-gray-900 border border-gray-700 rounded p-3 text-sm font-mono leading-relaxed">{{ sent_md }}</textarea>
+    <p class="text-xs text-gray-500">Saves a copy for this job only{% if not edited_cv %} (starting from the library CV with its lane line){% endif %}. The library CV stays as it is.</p>
+    <button class="border border-accent text-accent rounded px-4 py-1.5 text-sm hover:bg-accent/10">Save for this job{% if edited_cv %} as v{{ edited_cv_versions + 1 }}{% endif %}</button>
   </form>
   {% endif %}
-  {% if job_cv %}
-  <details><summary class="text-sm text-gray-400 cursor-pointer hover:text-gray-200">Preview</summary>
-    <div class="bg-gray-900/60 rounded p-5 mt-2"><textarea hidden data-markdown-src>{{ job_cv_markdown }}</textarea><div data-markdown class="prose prose-invert prose-sm max-w-none"></div></div>
-  </details>
-  {% endif %}
+
+  {# Picking: preview any candidate first; nothing changes until the button. #}
+  <div x-show="!editing" class="space-y-2">
+    {% if cv_picker.groups or cv_picker.saved %}
+    <div class="flex flex-wrap items-center gap-2 text-sm">
+      <span class="text-gray-500 text-xs">Preview</span>
+      <select x-model="src" @change="pickSource()" class="bg-gray-900 border border-gray-700 rounded px-2 py-1">
+        <template x-if="saved.length"><option value="saved" :selected="src === 'saved'">This job's saved CV</option></template>
+        <template x-for="g in groups" :key="g.slug"><option :value="g.slug" :selected="g.slug === src" x-text="g.name + (g.slug === own ? ' (this job’s archetype)' : '')"></option></template>
+      </select>
+      <select x-show="src !== 'saved'" x-model="ver" @change="load()" class="bg-gray-900 border border-gray-700 rounded px-2 py-1">
+        <template x-if="src === own"><option value="">Latest (follows new versions)</option></template>
+        <template x-for="(v, i) in versions()" :key="v.id"><option :value="String(v.id)" :selected="String(v.id) === ver" x-text="v.label + (i === 0 ? ' · latest' : '')"></option></template>
+      </select>
+      <select x-show="src === 'saved'" x-model="savedId" @change="load()" class="bg-gray-900 border border-gray-700 rounded px-2 py-1">
+        <template x-for="v in saved" :key="v.id"><option :value="String(v.id)" :selected="String(v.id) === savedId" x-text="v.label + (String(v.id) === cfg.active_saved_id ? ' · in use' : '')"></option></template>
+      </select>
+      <form method="post" :action="action()" class="sm:ml-auto" @submit="if (needsConfirm() && !confirm(needsConfirm())) $event.preventDefault()">
+        <input type="hidden" name="cv_version_id" :value="ver">
+        <input type="hidden" name="job_cv_id" :value="savedId">
+        <button :disabled="inUse()" class="border rounded px-3 py-1 text-sm disabled:opacity-50 disabled:cursor-default"
+                :class="inUse() ? 'border-gray-700 text-gray-500' : 'border-accent text-accent hover:bg-accent/10'" x-text="label()"></button>
+      </form>
+    </div>
+    <div class="bg-gray-900/60 rounded p-5">
+      <p x-show="loading" class="text-sm text-gray-500 animate-pulse">Loading preview…</p>
+      <div x-ref="preview" x-show="!loading" class="prose prose-invert prose-sm max-w-none"></div>
+    </div>
+    {% endif %}
+  </div>
 </div>
+<script>
+  // CV picker + preview. src = "saved" (this job's last saved copy) or an archetype slug;
+  // ver = library CV id, or "" = follow the latest CV of the job's own archetype.
+  function cvPanel(cfg) {
+    return {
+      editing: false, loading: false,
+      cfg, groups: cfg.groups, own: cfg.own_slug, saved: cfg.saved, inUseKind: cfg.in_use,
+      src: cfg.saved.length ? "saved" : cfg.library_slug, ver: cfg.saved.length ? "" : cfg.library_id,
+      savedId: cfg.saved.length ? String(cfg.saved[0].id) : "",
+      init() { if (this.src !== "saved" && this.src !== this.own && !this.ver) this.pickVersion(); this.load(); },
+      versions() { const g = this.groups.find((x) => x.slug === this.src); return g ? g.versions : []; },
+      pickVersion() { const v = this.versions(); this.ver = this.src === this.own || !v.length ? "" : String(v[0].id); },
+      pickSource() { if (this.src === "saved") this.ver = ""; else this.pickVersion(); this.load(); },
+      async load() {
+        this.loading = true;
+        const q = this.src === "saved" ? "pick=saved&job_cv_id=" + this.savedId : "cv_version_id=" + encodeURIComponent(this.ver);
+        const r = await fetch(`/jobs/${cfg.job_id}/cv/preview?${q}`);
+        const md = r.ok ? (await r.json()).markdown : "";
+        this.$refs.preview.innerHTML = md ? DOMPurify.sanitize(marked.parse(md, { breaks: true })) : "<p class='text-gray-500'>Nothing to preview.</p>";
+        this.loading = false;
+      },
+      inUse() {
+        if (this.src === "saved") return this.inUseKind === "saved" && this.savedId === cfg.active_saved_id;
+        return this.inUseKind === "library" && this.ver === cfg.library_id && this.src === cfg.library_slug;
+      },
+      action() { return `/jobs/${cfg.job_id}/` + (this.src === "saved" ? "cv/restore" : "cvlib"); },
+      label() {
+        if (this.inUse()) return "In use";
+        if (this.src === "saved") return this.savedId === String(cfg.saved[0].id) ? "Restore this CV" : "Restore this version";
+        return this.inUseKind === "saved" ? "Start over from this CV" : "Use this CV";
+      },
+      needsConfirm() {
+        return this.src !== "saved" && this.inUseKind === "saved"
+          ? "Start over from this library CV? Your saved CVs for this job stay available under “This job's saved CV”." : "";
+      },
+    };
+  }
+</script>
