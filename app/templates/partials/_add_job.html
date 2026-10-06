@@ -8,7 +8,7 @@
     <span class="text-accent">Added:</span>
     <span>{{ added.company }} — {{ added.title }}</span>
     {% if added_row and added_row.screening %}
-    <span class="text-gray-400">· {{ added_row.screening.decision }} · {{ added_row.screening.theme | theme_label }} · {{ added_row.screening.match_level or "no match level" }}</span>
+    <span class="text-gray-400">· {{ added_row.screening.decision }} · {{ added_row.screening.match_level or "no match level" }}</span>
     {% endif %}
     <a href="/jobs/{{ added.id }}" class="ml-auto text-accent hover:underline">Open →</a>
   </div>
@@ -40,13 +40,6 @@
       <input type="url" name="url" required value="{{ add_form.url or '' }}"
              placeholder="Paste a job URL (LinkedIn, jobs.ch, company careers page...)"
              class="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm">
-      <select name="force_theme" class="bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-gray-300"
-              title="Pin a theme: screening skips the classifier">
-        <option value="">Theme: auto</option>
-        {% for code, label in theme_pills %}
-        <option value="{{ code }}" {% if add_form.force_theme == code %}selected{% endif %}>Theme: {{ label }}</option>
-        {% endfor %}
-      </select>
       <button type="submit" :disabled="working"
               class="border border-accent text-accent rounded px-4 py-1.5 text-sm whitespace-nowrap disabled:opacity-50">
         <span x-show="!working">Add &amp; screen</span>

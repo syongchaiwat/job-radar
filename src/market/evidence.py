@@ -12,9 +12,9 @@ from sqlalchemy import func
 from sqlmodel import Session, select
 
 from src.db import ProfileTerm, Skill, SkillAlias
-from src.pipeline import profile_context as pc
-from src.pipeline.llm_call import call, load_prompt
-from src.pipeline.schemas import TermMappings
+from src.profile import context as pc
+from src.llm.call import call, load_prompt
+from src.llm.schemas import TermMappings
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 TEMPLATE = REPO_ROOT / "cv_profile" / "cv_template.md"
@@ -112,7 +112,7 @@ def refresh_term_map(session: Session, force: bool = False) -> dict[str, list[in
         by_name = {s.name.lower(): s.id for s in skills}
         for i in range(0, len(todo), 60):
             batch = todo[i:i + 60]
-            prompt = load_prompt("profile_skill_map").format(
+            prompt = load_prompt("market/profile_skill_map").format(
                 skills=", ".join(sorted(s.name for s in skills)), terms="\n".join(batch)
             )
             parsed, _ = call("deep", prompt, TermMappings, method="json_schema")

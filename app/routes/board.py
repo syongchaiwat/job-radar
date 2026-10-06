@@ -5,19 +5,19 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlmodel import Session
 
-from app.constants import ARCHIVED_STATUSES, IN_PROGRESS_STATUSES, MATCH_LEVELS, STATUS_OPTIONS, THEME_LABELS
+from app.constants import ARCHIVED_STATUSES, IN_PROGRESS_STATUSES, MATCH_LEVELS, STATUS_OPTIONS
 from app.deps import get_session
 from app.services.jobs import active_archetypes, evidenced_skill_ids, job_archetypes, list_board_rows, ranking_for
-from src.lanes import load_lanes
+from src.lanes.core import load_lanes
 from app.templating import templates
 from src.db import Job
 from src.archetypes.commit import assign_job
-from src.lanes import assess_job
+from src.lanes.core import assess_job
 from src.enrich import enrich_job
 from src.ingest.dedupe import is_duplicate, job_id as url_job_id
 from src.ingest.manual import build_job, create_manual_job
 from src.ingest.url_fetch import fetch_and_extract
-from src.pipeline.run import screen_job
+from src.screening.run import archetype_text, screen_job
 
 router = APIRouter()
 
@@ -43,7 +43,6 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
                 "job_id": row["job"].id,
                 "company": row["job"].company,
                 "title": row["job"].title,
-                "theme_code": row["screening"].theme if row["screening"] else None,
                 "excluded": bool(row["screening"] and row["screening"].decision == "exclude"),
                 "status": row["tracking"].status if row["tracking"] else "new",
                 "first_seen": row["job"].first_seen.isoformat(),
@@ -59,7 +58,6 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
     )
     board_config = json.dumps(
         {
-            "themeOrder": list(THEME_LABELS),
             "archetypeOrder": [str(a.id) for a in archetypes],
             "statusOrder": STATUS_OPTIONS,
             "matchOrder": MATCH_LEVELS,
@@ -75,7 +73,6 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
             "rows": rows,
             "jobs_json": jobs_json,
             "board_config": board_config,
-            "theme_pills": list(THEME_LABELS.items()),
             "archetype_pills": [(str(a.id), a.name) for a in archetypes],
             "lane_pills": [(l.key, l.name) for l in load_lanes()],
             "add_form": add_form or {},
@@ -96,13 +93,12 @@ def add_job(
     request: Request,
     session: Session = Depends(get_session),
     url: str = Form(...),
-    force_theme: str = Form(""),
     description: str = Form(""),
 ):
     """Same steps as scripts/add_manual_job.py + `run --job-id`, behind a form:
     dedupe -> auto-fetch (unless a description was pasted) -> insert -> screen."""
     url, description = url.strip(), description.strip()
-    form = {"url": url, "force_theme": force_theme, "description": description}
+    form = {"url": url, "description": description}
     if not url:
         return _render_board(request, session, add_form={**form, "error": "Paste a job URL first."})
 
@@ -120,10 +116,19 @@ def add_job(
         title, company, location = fetched["title"], fetched["company"], fetched["location"]
 
     raw = build_job(url, description=description, title=title, company=company, location=location)
-    job = create_manual_job(session, raw, forced_theme=force_theme or None)
+    job = create_manual_job(session, raw)
+    session.commit()
+
+    try:  # role card + skills + embedding + archetype first, so screening can use the archetype
+        enrich_job(session, job)
+        session.commit()
+        assign_job(session, job.id)
+        session.commit()
+    except Exception:  # never blocks adding the job
+        session.rollback()
 
     try:
-        session.add(screen_job(job))
+        session.add(screen_job(job, archetype_text(session, job.id)))
         session.add(job)  # screen_job backfills title/company from the description
         session.commit()
     except Exception as exc:  # the job is saved either way; screening can be re-run from the CLI
@@ -132,11 +137,7 @@ def add_job(
             request, session, add_form={"error": f"Added the job, but screening failed: {exc}"}
         )
 
-    try:  # role card + skills + embedding + archetype; a failure here never blocks adding the job
-        enrich_job(session, job)
-        session.commit()
-        assign_job(session, job.id)
-        session.commit()
+    try:
         assess_job(session, job)
         session.commit()
     except Exception:

@@ -2,7 +2,6 @@
 
 Usage:
     python scripts/archetypes.py status            # active set, pool size, latest run
-    python scripts/archetypes.py seed-v0           # set v0 from the legacy themes (once)
     python scripts/archetypes.py rework            # run a rework now and print the draft proposal
     python scripts/archetypes.py assign --job-id <id>
 """
@@ -38,15 +37,12 @@ def print_proposal(p: dict) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["status", "seed-v0", "rework", "assign"])
+    parser.add_argument("command", choices=["status", "rework", "assign"])
     parser.add_argument("--job-id")
     args = parser.parse_args()
     engine = init_db(get_engine())
     with Session(engine) as session:
-        if args.command == "seed-v0":
-            aset = commit.seed_v0(session)
-            print("seeded v0" if aset else "an archetype set already exists; nothing to do")
-        elif args.command == "status":
+        if args.command == "status":
             aset = rework.active_set(session)
             pool = session.exec(select(Job).where(Job.market_data == True)).all()  # noqa: E712
             run = session.exec(select(ClassifyRun).order_by(ClassifyRun.id.desc())).first()

@@ -18,8 +18,8 @@ load_dotenv(REPO_ROOT / ".env")
 from sqlmodel import Session, select  # noqa: E402
 
 from src.db import Job, Screening, get_engine, init_db  # noqa: E402
-from src.pipeline.nodes import generate_blurb_node  # noqa: E402
-from src.pipeline.schemas import PipelineState  # noqa: E402
+from src.screening.nodes import generate_blurb_node  # noqa: E402
+from src.llm.schemas import PipelineState  # noqa: E402
 
 
 def backfill():

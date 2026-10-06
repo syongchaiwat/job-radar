@@ -132,7 +132,7 @@ def _current_map(session: Session, aset, archetypes, counts) -> tuple[list, list
     market = {j.id for j in session.exec(select(Job).where(Job.market_data == True)).all()}  # noqa: E712
     xs = [c[0] for c in coords.values()]
     ys = [c[1] for c in coords.values()]
-    method_note = {"llm": "matched by the LLM", "embedding": "matched directly", "user": "set by you", "rework": "", "legacy": ""}
+    method_note = {"llm": "matched by the LLM", "embedding": "matched directly", "user": "set by you", "rework": ""}
     points = []
     for pj in pool:
         x, y = coords[pj.job_id]

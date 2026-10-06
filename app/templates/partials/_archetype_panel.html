@@ -8,7 +8,6 @@
   <p class="text-xs text-gray-500">
     {% if archetype_primary.method == 'user' %}set by you
     {% elif archetype_primary.method == 'rework' %}confirmed in the last rework
-    {% elif archetype_primary.method == 'legacy' %}from the legacy theme
     {% elif archetype_primary.method == 'llm' %}chosen by the LLM{% if archetype_primary.confidence is not none %} · confidence {{ (archetype_primary.confidence * 100) | round | int }}%{% endif %}
     {% else %}matched directly{% if archetype_primary.score is not none %} · score {{ archetype_primary.score | round(2) }}{% endif %}{% endif %}
   </p>

@@ -133,7 +133,7 @@ def _archetype_bundle(session: Session, job_id: str) -> dict:
 
 
 def _cached_breakdown(job: Job):
-    from src.pipeline.schemas import DescriptionBreakdown
+    from src.llm.schemas import DescriptionBreakdown
 
     if not job.description_breakdown:
         return None
@@ -144,7 +144,7 @@ def _cached_breakdown(job: Job):
 
 
 def _cvlib_bundle(session: Session, job: Job) -> dict:
-    from src.cvlib import library
+    from src.cv import library
     from src.db import CVVersion
 
     job_cv = library.cv_for_job(session, job)
@@ -171,7 +171,7 @@ def evidenced_skill_ids(session: Session) -> set[int]:
 
 
 def ranking_for(session: Session, job: Job, evidenced: set[int]) -> dict:
-    from src import lanes
+    from src.lanes import core as lanes
     from src.db import LaneAssessment
 
     a = session.get(LaneAssessment, job.id)
@@ -182,8 +182,8 @@ def ranking_for(session: Session, job: Job, evidenced: set[int]) -> dict:
 
 
 def _lane_bundle(session: Session, job: Job) -> dict:
-    from src import letters
-    from src.lanes import lane_by_key, load_lanes
+    from src.letters import core as letters
+    from src.lanes.core import lane_by_key, load_lanes
 
     r = ranking_for(session, job, evidenced_skill_ids(session))
     return {

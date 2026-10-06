@@ -28,8 +28,8 @@ from typing import Optional
 
 import httpx
 
-from src.pipeline.llm_call import call, load_prompt, truncate
-from src.pipeline.schemas import ExtractedJobPosting
+from src.llm.call import call, load_prompt, truncate
+from src.llm.schemas import ExtractedJobPosting
 
 USER_AGENT = "job-radar/1.0 (+https://github.com/syongchaiwat/job-radar)"
 
@@ -62,7 +62,7 @@ def fetch_and_extract(url: str) -> Optional[dict]:
     except FetchBlocked:
         return None
 
-    prompt = load_prompt("extract_job_posting").format(page_text=truncate(page_text, n=12000))
+    prompt = load_prompt("ingest/job_posting").format(page_text=truncate(page_text, n=12000))
     parsed, _log = call("fast", prompt, ExtractedJobPosting)
     # A page can load fine and still hold no posting: jobs.ch "job-recommendations"
     # links return a shell (nav + footer) and load the job via JavaScript. Treat

@@ -11,7 +11,7 @@ from typing import Optional, Protocol, TypedDict
 
 
 class JobDict(TypedDict):
-    """Return shape every fetch_theme() implementation must produce.
+    """Return shape every fetch_group() implementation must produce.
 
     All keys are always present; several are Optional because the source
     may not give us that field for a given posting (e.g. SerpApi's `level`
@@ -26,20 +26,20 @@ class JobDict(TypedDict):
     location: Optional[str]
     level: Optional[str]
     posted_at: Optional[datetime]
-    theme_hint: str  # echoes the theme_id this call was made for
+    search_hint: str  # echoes the search group (archetype slug) this call was made for
 
 
-class FetchTheme(Protocol):
-    """Signature every ingest source module exposes as `fetch_theme`.
+class FetchGroup(Protocol):
+    """Signature every ingest source module exposes as `fetch_group`.
 
-    One call per theme, keywords combined (OR'd, or otherwise folded into a
+    One call per search group (an archetype), keywords combined (OR'd, or otherwise folded into a
     single query) rather than one call per keyword, to stay inside each
     source's free/paid quota -- see the module docstring of each
     implementation for the specific rate-limit reasoning.
 
     Implementations may add extra source-specific keyword args (e.g.
     `where`, `max_days_old`, `results`) with their own defaults; callers in
-    `run.py` only ever pass `theme_id` and `keywords` positionally.
+    `run.py` only ever pass `group` and `keywords` positionally.
 
     Raises a module-specific `*NotConfigured` exception (not a generic one)
     when its required API key/env var is missing, so `run.py` can catch
@@ -47,4 +47,4 @@ class FetchTheme(Protocol):
     one bad source aborting the whole ingest run.
     """
 
-    def __call__(self, theme_id: str, keywords: list[str]) -> list[JobDict]: ...
+    def __call__(self, group: str, keywords: list[str]) -> list[JobDict]: ...

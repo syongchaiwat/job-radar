@@ -12,10 +12,10 @@ from sqlmodel import Session, select
 
 from app.deps import get_session
 from app.templating import templates
-from src.cvlib import library
+from src.cv import library
 from src.db import Archetype, CVVersion, Job, get_engine
 from src.market.stats import market_overview
-from src.pipeline.cv_pdf import markdown_to_pdf
+from src.cv.pdf import markdown_to_pdf
 
 router = APIRouter()
 _RUNNING: dict[int, dict] = {}  # archetype_id -> {"error": str | None}

@@ -12,8 +12,8 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from src.archetypes.features import PoolJob, cosine_dict, skill_weights
-from src.pipeline.llm_call import call, load_prompt
-from src.pipeline.schemas import ArchetypeAdjudication
+from src.llm.call import call, load_prompt
+from src.llm.schemas import ArchetypeAdjudication
 
 W_CENTROID, W_KNN, W_SKILL = 0.4, 0.3, 0.3
 KNN_K = 5
@@ -132,7 +132,7 @@ def adjudicate(pj: PoolJob, candidates: list[Profile]) -> ArchetypeAdjudication:
         )
     from src.archetypes.features import compact_card
 
-    prompt = load_prompt("archetype_adjudicate").format(candidates="\n\n".join(blocks), job=compact_card(pj, max_summary=600))
+    prompt = load_prompt("archetypes/adjudicate").format(candidates="\n\n".join(blocks), job=compact_card(pj, max_summary=600))
     parsed, _log = call("deep", prompt, ArchetypeAdjudication, method="json_schema")
     return parsed
 

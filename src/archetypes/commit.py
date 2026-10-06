@@ -1,8 +1,7 @@
-"""Archetype sets: seed v0 from the legacy themes, confirm a rework proposal into
-a new version, assign individual jobs, export generated notes to the vault."""
+"""Archetype sets: confirm a rework proposal into a new version, assign
+individual jobs, export generated notes to the vault."""
 import json
 import os
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -10,47 +9,13 @@ from sqlmodel import Session, select
 
 from src.archetypes.assign import DEFAULT_THRESHOLDS, Profile, assign, build_profiles
 from src.archetypes.features import load_jobs, skill_idf, top_skills
-from src.db import Archetype, ArchetypeSet, ClassifyRun, GroundTruth, Job, JobArchetype, Screening
-from src.pipeline import profile_context as pc
+from src.db import Archetype, ArchetypeSet, ClassifyRun, Job, JobArchetype
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def _active(session: Session) -> ArchetypeSet | None:
     return session.exec(select(ArchetypeSet).where(ArchetypeSet.status == "active")).first()
-
-
-def seed_v0(session: Session) -> ArchetypeSet | None:
-    """Set v0 = the legacy hand-written themes, so assignment works before the first rework.
-    Members come from your label, a pinned theme, or the latest screening's theme."""
-    if session.exec(select(ArchetypeSet)).first() is not None:
-        return None
-    aset = ArchetypeSet(version=0, status="active", notes="Seeded from the legacy themes (profile/themes).")
-    session.add(aset)
-    session.flush()
-    by_theme = {}
-    for code in pc.THEME_FILES:
-        text = pc.load_theme(code)
-        name = (re.search(r"^name:\s*(.+)$", text, re.M) or [None, f"Theme {code}"])[1].strip()
-        intro = re.search(r"^# [^\n]+\n\n(.+?)(?:\n\n|\Z)", text, re.M | re.S)
-        kw = re.search(r"## Retrieval keywords\s*\n(.+)", text)
-        a = Archetype(set_version=0, slug=f"theme-{code}", name=name, definition=intro.group(1).strip() if intro else name,
-                      defining_skills=json.dumps([k.strip() for k in (kw.group(1).split(",") if kw else [])][:10]),
-                      legacy_theme=code)
-        session.add(a)
-        session.flush()
-        by_theme[code] = a
-    latest = {}
-    for sc in session.exec(select(Screening).order_by(Screening.id)).all():
-        latest[sc.job_id] = sc
-    for job in session.exec(select(Job)).all():
-        gt = session.get(GroundTruth, job.id)
-        theme = (gt.theme_code if gt and gt.source == "user_correction" else None) or job.forced_theme or (latest.get(job.id).theme if job.id in latest else None)
-        if theme in by_theme:
-            session.add(JobArchetype(job_id=job.id, set_version=0, archetype_id=by_theme[theme].id, method="legacy",
-                                     rationale="from the legacy theme"))
-    session.commit()
-    return aset
 
 
 def profiles_for_set(session: Session, version: int):

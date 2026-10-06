@@ -36,8 +36,8 @@ load_dotenv(REPO_ROOT / ".env")
 from sqlmodel import Session, delete, select  # noqa: E402
 
 from src.db import GroundTruth, Job, Screening, get_engine, init_db  # noqa: E402
-from src.pipeline.llm_config import PROVIDER, model_label  # noqa: E402
-from src.pipeline.run import screen_job  # noqa: E402
+from src.llm.config import PROVIDER, model_label  # noqa: E402
+from src.screening.run import archetype_text, screen_job  # noqa: E402
 
 RESULTS_DIR = REPO_ROOT / "evals" / "results"
 
@@ -54,24 +54,10 @@ def normalize_fit(fit_raw: str) -> str | None:
     return leading if leading in CANONICAL_FIT_LEVELS else None
 
 
-def theme_matches(ground_truth_theme: str, screening_theme: str | None, decision: str) -> bool:
-    """'none' ground truth matches either an exclude or a theme=none/None result --
-    both represent 'this job doesn't fit any theme', just reached via different
-    branches of the graph (filter_gate exclude vs classify_theme=none)."""
-    if ground_truth_theme == "none":
-        return decision == "exclude" or screening_theme in (None, "none")
-    return screening_theme == ground_truth_theme
-
-
-# NOTE on excluded-with-real-theme: GroundTruth only records theme + fit, not an
-# explicit "should this be excluded" judgment. A job can genuinely belong to a
-# real theme (topically) AND be correctly excluded by a filter rule (years
-# experience, visa, German) -- those are two independent layers, not one. So
-# this list is a review shortlist, not a confirmed-bug count: checked by hand on
-# 20 Aug, 1 of 3 flagged here (Artificialy) was an actual bug; Lobby and P&G were
-# both correctly excluded (real 8+ years / real EU-EFTA restriction). A cleaner
-# fix would be adding an explicit expected_decision label to GroundTruth -- left
-# as a future enhancement, not built now.
+# NOTE on excluded-with-a-fit-label: GroundTruth records fit, not an explicit
+# "should this be excluded" judgment. A job can fit topically AND be correctly
+# excluded by a filter rule (years experience, visa, German) -- two independent
+# layers. So this list is a review shortlist, not a confirmed-bug count.
 
 
 def run(fast: bool):
@@ -90,7 +76,7 @@ def run(fast: bool):
             print(f"Fresh re-screening {len(gt_rows)} ground-truth jobs (this takes a while)...")
             for i, gt in enumerate(gt_rows, 1):
                 job = session.get(Job, gt.job_id)
-                screening = screen_job(job)
+                screening = screen_job(job, archetype_text(session, job.id))
                 session.add(screening)
                 session.commit()
                 print(f"  [{i}/{len(gt_rows)}] {job.company} — {job.title}")
@@ -114,12 +100,7 @@ def run(fast: bool):
                 )
                 continue
 
-            # A forced theme (set via the dashboard's "Your labels" or --force-theme)
-            # bypasses classify_theme, so it would score itself correct -- leave
-            # those out of theme accuracy. Match/gaps still ran, so they still count.
-            theme_forced = bool(job.forced_theme)
-            theme_ok = None if theme_forced else theme_matches(gt.theme_code, screening.theme, screening.decision)
-            excluded_with_real_theme = gt.theme_code != "none" and screening.decision == "exclude"
+            excluded_with_fit = not gt.fit_raw.strip().lower().startswith("no fit") and screening.decision == "exclude"
 
             expected_fit = normalize_fit(gt.fit_raw)
             match_ok = match_within_one = None
@@ -136,15 +117,11 @@ def run(fast: bool):
                     "job_id": gt.job_id,
                     "company": job.company,
                     "title": job.title,
-                    "ground_truth_theme": gt.theme_code,
                     "ground_truth_fit": gt.fit_raw,
                     "ground_truth_source": gt.source,
                     "decision": screening.decision,
-                    "screening_theme": screening.theme,
                     "match_level": screening.match_level,
-                    "theme_forced": theme_forced,
-                    "theme_ok": theme_ok,
-                    "excluded_with_real_theme": excluded_with_real_theme,
+                    "excluded_with_fit": excluded_with_fit,
                     "expected_fit": expected_fit,
                     "match_ok": match_ok,
                     "match_within_one": match_within_one,
@@ -159,10 +136,7 @@ def _report(results: list[dict]):
     errors = [r for r in results if "error" in r]
 
     n = len(scored)
-    theme_scored = [r for r in scored if r["theme_ok"] is not None]
-    theme_correct = sum(1 for r in theme_scored if r["theme_ok"])
-    n_theme = len(theme_scored)
-    review_list = [r for r in scored if r["excluded_with_real_theme"]]
+    review_list = [r for r in scored if r["excluded_with_fit"]]
 
     matchable = [r for r in scored if r["match_ok"] is not None]
     match_exact = sum(1 for r in matchable if r["match_ok"])
@@ -174,11 +148,8 @@ def _report(results: list[dict]):
     print(f"Provider: {PROVIDER} (fast={model_label('fast')}, deep={model_label('deep')})")
     print(f"Scored: {n}/{len(results)}" + (f"  ({len(errors)} errors)" if errors else ""))
     print()
-    print(f"Theme accuracy:        {theme_correct}/{n_theme}  ({100*theme_correct/n_theme:.0f}%)" if n_theme else "Theme accuracy: n/a")
-    if n_theme < n:
-        print(f"    ({n - n_theme} jobs skipped: theme forced by the user, classifier didn't run)")
     print(
-        f"Excluded w/ real theme: {len(review_list)}/{n}  "
+        f"Excluded despite a fit label: {len(review_list)}/{n}  "
         f"(review list, NOT a bug count -- some are legitimately excluded by a filter rule)"
     )
     for r in review_list:
@@ -207,8 +178,7 @@ def _report(results: list[dict]):
         "model_deep": model_label("deep"),
         "summary": {
             "scored": n,
-            "theme_accuracy": theme_correct / n_theme if n_theme else None,
-            "excluded_with_real_theme_count": len(review_list),
+            "excluded_with_fit_count": len(review_list),
             "match_exact": match_exact / len(matchable) if matchable else None,
             "match_within_one": match_within_one / len(matchable) if matchable else None,
         },

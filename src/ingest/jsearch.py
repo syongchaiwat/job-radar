@@ -2,7 +2,7 @@
 LinkedIn-posted roles among others -- this is the LinkedIn-coverage source
 since LinkedIn itself has no public API and blocks unauthenticated scraping.
 
-One call per theme, keywords joined with OR, to stay inside the paid quota.
+One call per search group, keywords joined with OR, to stay inside the paid quota.
 """
 import os
 from datetime import datetime
@@ -19,8 +19,8 @@ class JSearchNotConfigured(Exception):
     pass
 
 
-def fetch_theme(
-    theme_id: str,
+def fetch_group(
+    group: str,
     keywords: list[str],
     location: str = "Zurich, Switzerland",
     date_posted: str = "today",
@@ -52,7 +52,7 @@ def fetch_theme(
                 "location": r.get("job_city") or r.get("job_country"),
                 "level": None,
                 "posted_at": _parse_date(r.get("job_posted_at_datetime_utc")),
-                "theme_hint": theme_id,
+                "search_hint": group,
             }
         )
     return jobs

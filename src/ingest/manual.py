@@ -19,7 +19,6 @@ def build_job(
     title: Optional[str] = None,
     company: Optional[str] = None,
     location: Optional[str] = None,
-    theme_hint: Optional[str] = None,
 ) -> dict:
     return {
         "source": "manual",
@@ -30,11 +29,10 @@ def build_job(
         "location": location,
         "level": None,
         "posted_at": None,
-        "theme_hint": theme_hint,
     }
 
 
-def create_manual_job(session: Session, raw: dict, forced_theme: Optional[str] = None) -> Job:
+def create_manual_job(session: Session, raw: dict) -> Job:
     """Insert a build_job() dict as a Job row. Caller checks is_duplicate first.
     Shared by scripts/add_manual_job.py and the dashboard's "Add a job" form."""
     job = Job(
@@ -45,8 +43,6 @@ def create_manual_job(session: Session, raw: dict, forced_theme: Optional[str] =
         title=raw["title"],
         description=raw.get("description"),
         location=raw.get("location"),
-        theme_hint=raw.get("theme_hint"),
-        forced_theme=forced_theme,
     )
     session.add(job)
     session.commit()

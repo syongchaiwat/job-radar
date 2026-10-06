@@ -8,7 +8,7 @@ from app.deps import get_session
 from app.templating import templates
 from src.db import JobSkill, Skill, SkillAlias
 from src.enrich.skills import merge_skills
-from src.pipeline.schemas import SkillCategory
+from src.llm.schemas import SkillCategory
 
 router = APIRouter()
 CATEGORIES = list(SkillCategory.__args__)

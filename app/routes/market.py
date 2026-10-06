@@ -11,9 +11,9 @@ from app.deps import get_session
 from app.templating import templates
 from src.db import Archetype, MarketSuggestion, MarketTodo, ProfileTerm
 from src.market.stats import market_overview
-from src.pipeline import profile_context as pc
-from src.pipeline.llm_call import call, load_prompt
-from src.pipeline.schemas import NextSteps
+from src.profile import context as pc
+from src.llm.call import call, load_prompt
+from src.llm.schemas import NextSteps
 
 router = APIRouter()
 
@@ -51,7 +51,7 @@ def suggest(archetype_id: int, session: Session = Depends(get_session)):
     projects = "\n".join(
         line for line in pc.load_projects().splitlines() if line.startswith("## ") or line.startswith("- **Tools:**")
     )
-    prompt = load_prompt("market_suggestions").format(
+    prompt = load_prompt("market/suggestions").format(
         archetype=f"{a.name}: {a.definition}",
         demand="\n".join(f"- {d['skill']}: {round(d['share'] * 100)}% ({d['jobs']} of {row['n']})" for d in row["demand"][:25]),
         gaps="\n".join(f"- {d['skill']}: {round(d['share'] * 100)}%" for d in row["gaps"]) or "(none above the threshold)",

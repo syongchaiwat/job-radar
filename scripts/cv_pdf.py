@@ -4,7 +4,7 @@ Usage:
     python scripts/cv_pdf.py cv_drafts/<draft>.md            # writes cv_drafts/<draft>.pdf
     python scripts/cv_pdf.py cv_drafts/<draft>.md --html     # also writes the HTML, for tweaking the CSS
 
-Layout rules live in src/pipeline/cv_style.css. Photo: cv_profile/photo.jpg (optional, gitignored).
+Layout rules live in src/cv/style.css. Photo: cv_profile/photo.jpg (optional, gitignored).
 """
 import argparse
 import sys
@@ -13,7 +13,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from src.pipeline.cv_pdf import markdown_to_html, markdown_to_pdf, page_count  # noqa: E402
+from src.cv.pdf import markdown_to_html, markdown_to_pdf, page_count  # noqa: E402
 
 
 def main():

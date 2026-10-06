@@ -19,7 +19,7 @@ load_dotenv(REPO_ROOT / ".env")
 from sqlmodel import Session, select  # noqa: E402
 
 from src.db import Job, LaneAssessment, RoleCard, get_engine, init_db  # noqa: E402
-from src.lanes import assess_job, lanes_hash  # noqa: E402
+from src.lanes.core import assess_job, lanes_hash  # noqa: E402
 
 
 def main():

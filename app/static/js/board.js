@@ -71,7 +71,7 @@ function board() {
     isVisible(jobId) {
       return this.visible.some((j) => j.job_id === jobId);
     },
-    // Unknown values (no theme, not screened, no CV) sort last.
+    // Unknown values (no archetype, not screened, no CV) sort last.
     rankIn(list, value) {
       const i = list.indexOf(value);
       return i === -1 ? list.length : i;

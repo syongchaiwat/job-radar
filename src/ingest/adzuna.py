@@ -1,6 +1,6 @@
 """Adzuna API client (free tier). https://developer.adzuna.com/
 
-One call per theme using what_or (any-of-these-words) to stay well inside the
+One call per search group using what_or (any-of-these-words) to stay well inside the
 free-tier daily call quota instead of one call per keyword.
 """
 import os
@@ -18,8 +18,8 @@ class AdzunaNotConfigured(Exception):
     pass
 
 
-def fetch_theme(
-    theme_id: str,
+def fetch_group(
+    group: str,
     keywords: list[str],
     where: str = "Zurich",
     max_days_old: int = 2,
@@ -55,7 +55,7 @@ def fetch_theme(
                 "location": (r.get("location") or {}).get("display_name"),
                 "level": None,
                 "posted_at": _parse_date(r.get("created")),
-                "theme_hint": theme_id,
+                "search_hint": group,
             }
         )
     return jobs

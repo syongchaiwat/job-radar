@@ -16,4 +16,4 @@ Defined in `lanes.md`; job-radar appends it to this file when screening.
 - Languages: English fluent, German A2 (learning).
 
 ## Soft preferences
-- Theme priority: 3a and 2 first, then 3b, then 1 and 4.
+- Priority: ML engineering and LLM / agentic AI first, then data engineering, then business analytics.

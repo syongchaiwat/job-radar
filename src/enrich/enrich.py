@@ -12,9 +12,9 @@ from sqlmodel import Session, select
 from src.db import Embedding, Job, JobSkill, RoleCard
 from src.enrich.embeddings import EMBED_MODEL, embed_texts, text_hash, to_bytes
 from src.enrich.skills import job_skill_names, known_skills_prompt, resolve_skill
-from src.pipeline.llm_call import call, load_prompt, truncate
-from src.pipeline.llm_config import model_label
-from src.pipeline.schemas import RoleCardExtraction
+from src.llm.call import call, load_prompt, truncate
+from src.llm.config import model_label
+from src.llm.schemas import RoleCardExtraction
 
 ROLE_CARD_PROMPT_VERSION = "v1"
 ROLE_CARD_ROLE = "deep"  # Sonnet: cards feed every comparison, so quality matters more than the extra cent
@@ -47,7 +47,7 @@ def card_text(card: RoleCard, skills: dict[str, list[str]]) -> str:
 
 
 def extract_role_card(session: Session, job: Job) -> RoleCard:
-    prompt = load_prompt("extract_role_card").format(
+    prompt = load_prompt("enrich/role_card").format(
         known_skills=known_skills_prompt(session),
         job_title=job.title or "(untitled)",
         job_company=job.company or "(unknown)",

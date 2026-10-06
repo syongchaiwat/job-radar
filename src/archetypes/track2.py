@@ -5,8 +5,8 @@ every batch (TnT-LLM pattern), then labels every job with the final version.
 Independent of Track 1, so the two catch each other's blind spots.
 """
 from src.archetypes.features import PoolJob, compact_card
-from src.pipeline.llm_call import call, load_prompt
-from src.pipeline.schemas import JobLabels, Taxonomy
+from src.llm.call import call, load_prompt
+from src.llm.schemas import JobLabels, Taxonomy
 
 ROLE = "critique"  # Opus, native structured outputs
 TAXONOMY_BATCH = 24
@@ -31,7 +31,7 @@ def build_taxonomy(pool: list[PoolJob], progress=None) -> tuple[Taxonomy, int]:
             "Propose the initial taxonomy from this batch." if taxonomy is None
             else "Refine the previous taxonomy with this batch: keep what still fits, add, merge, split or rename where these jobs require it. Return the full updated taxonomy."
         )
-        prompt = load_prompt("archetype_taxonomy").format(
+        prompt = load_prompt("archetypes/taxonomy").format(
             previous=_taxonomy_text(taxonomy) if taxonomy else "(none yet: this is the first batch)",
             cards="\n".join(compact_card(pj) for pj in batch),
             instruction=instruction,
@@ -49,7 +49,7 @@ def label_jobs(pool: list[PoolJob], taxonomy: Taxonomy, progress=None) -> tuple[
     for i, batch in enumerate(batches, 1):
         if progress:
             progress(f"Track 2: labeling jobs, batch {i}/{len(batches)}")
-        prompt = load_prompt("archetype_label").format(
+        prompt = load_prompt("archetypes/label").format(
             taxonomy=_taxonomy_text(taxonomy), cards="\n".join(compact_card(pj) for pj in batch)
         )
         parsed, log = call(ROLE, prompt, JobLabels)

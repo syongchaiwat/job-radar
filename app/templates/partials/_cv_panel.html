@@ -2,9 +2,9 @@
    marked + DOMPurify) from the hidden <textarea> next to each target; textarea
    content is escaped text, so a CV can never inject markup before sanitizing. #}
 <div id="cv-panel" x-data="{ editing: false }" class="border {% if cv_draft %}border-accent/40{% else %}border-gray-800{% endif %} rounded-lg p-4">
-  {% if not screening or not screening.theme or screening.theme == 'none' %}
+  {% if not archetype_primary %}
   <p class="text-xs uppercase tracking-wide text-gray-500 mb-3">Tailored CV</p>
-  <p class="text-sm text-gray-500">This job has no theme yet. Pick one under "Your labels" to prepare a CV.</p>
+  <p class="text-sm text-gray-500">This job has no archetype yet. Assign one in the archetype panel to prepare a CV.</p>
 
   {% elif not cv_draft %}
   <p class="text-xs uppercase tracking-wide text-gray-500 mb-3">Tailored CV</p>
@@ -41,7 +41,7 @@
               class="border border-gray-700 rounded px-3 py-1 text-sm hover:border-gray-500 disabled:opacity-50">
         <span class="htmx-hide-on-request">Regenerate</span><span class="htmx-show-on-request animate-pulse">Regenerating…</span>
       </button>
-      <a href="/jobs/{{ job.id }}/cv/pdf" class="text-sm text-accent hover:underline" title="A4, rendered with cv_style.css (takes a few seconds)">Download PDF</a>
+      <a href="/jobs/{{ job.id }}/cv/pdf" class="text-sm text-accent hover:underline" title="A4, rendered with src/cv/style.css (takes a few seconds)">Download PDF</a>
       <a href="/jobs/{{ job.id }}/cv/download" class="text-sm text-accent hover:underline">Download .md</a>
     </span>
   </div>

@@ -27,8 +27,7 @@ class Job(SQLModel, table=True):
     level: Optional[str] = None  # raw seniority/workload text
     posted_at: Optional[datetime] = None
     first_seen: datetime = Field(default_factory=_utcnow)
-    theme_hint: Optional[str] = None  # which theme's keyword search surfaced this job (adzuna/jsearch only)
-    forced_theme: Optional[str] = None  # user override: screening skips classify_theme and uses this instead
+    search_hint: Optional[str] = None  # which archetype's keyword search surfaced this job (API sources only)
     description_breakdown: Optional[str] = None  # JSON-encoded DescriptionBreakdown, computed lazily on first Job Detail view
     description_breakdown_computed_at: Optional[datetime] = None
     lane: Optional[str] = None  # lanes.md key (working-student, thesis-internship, ...)
@@ -39,14 +38,12 @@ class Job(SQLModel, table=True):
 
 
 class GroundTruth(SQLModel, table=True):
-    """Hand-labeled theme/fit, one row per job (latest label wins). Eval
+    """Hand-labeled fit, one row per job (latest label wins). Eval
     reference, not app output. Not just the original 24 seed jobs forever --
     source/created_at track provenance so future corrections made while
     using the real dashboard (Phase 4) can land here too, generically."""
 
     job_id: str = Field(primary_key=True, foreign_key="job.id")
-    theme_raw: str
-    theme_code: str  # normalized: "1" | "2" | "3a" | "3b" | "4" | "none"
     fit_raw: str
     source: str = Field(default="seed")  # e.g. "seed_2026-08-12" | "user_correction"
     created_at: Optional[datetime] = None  # None for rows migrated in before this field existed
@@ -59,13 +56,10 @@ class Screening(SQLModel, table=True):
     job_id: str = Field(foreign_key="job.id")
     decision: str  # "keep" | "exclude" | "flag"
     filter_reasons: str = "[]"  # JSON-encoded list[str]
-    theme: Optional[str] = None
-    theme_rationale: Optional[str] = None
     blurb: Optional[str] = None  # one-sentence card summary from generate_blurb_node
     match_level: Optional[str] = None  # "strong" | "good" | "moderate" | "stretch" | None
     match_rationale: Optional[str] = None
     gaps: str = "[]"  # JSON-encoded list[str]
-    target_lane: Optional[str] = None
     model_used: Optional[str] = None
     tokens: Optional[int] = None
     latency_ms: Optional[float] = None
@@ -91,7 +85,7 @@ class CVDraft(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     job_id: str = Field(foreign_key="job.id")
-    theme: str
+    archetype_slug: str
     draft_markdown: str
     attempt_count: int
     verdict: str  # "approve" | "revise" -- "revise" + attempt_count>=MAX_ATTEMPTS means it hit the ceiling unresolved
@@ -169,8 +163,7 @@ class Embedding(SQLModel, table=True):
 
 
 class ArchetypeSet(SQLModel, table=True):
-    """A confirmed set of archetypes. Exactly one is active; older ones stay for history.
-    Version 0 is seeded from the legacy hand-written themes."""
+    """A confirmed set of archetypes. Exactly one is active; older ones stay for history."""
 
     version: int = Field(primary_key=True)
     status: str = "active"  # active | superseded
@@ -191,7 +184,6 @@ class Archetype(SQLModel, table=True):
     exclude_criteria: str = ""
     defining_skills: str = "[]"  # JSON list[str]
     maps_from: str = "[]"  # JSON list[int]: archetype ids in the previous set this one continues
-    legacy_theme: Optional[str] = None  # set v0 only: the theme code it came from
     created_at: datetime = Field(default_factory=_utcnow)
 
 
@@ -203,7 +195,7 @@ class JobArchetype(SQLModel, table=True):
     set_version: int = Field(foreign_key="archetypeset.version")
     archetype_id: int = Field(foreign_key="archetype.id")
     role: str = "primary"  # primary | secondary
-    method: str = "embedding"  # embedding | llm | user | rework | legacy
+    method: str = "embedding"  # embedding | llm | user | rework
     score: Optional[float] = None
     confidence: Optional[float] = None
     rationale: Optional[str] = None
@@ -329,7 +321,6 @@ def get_engine(db_path: Optional[str] = None):
 # only creates missing tables, so older databases get these via ALTER TABLE.
 _ADDED_COLUMNS = {
     "job": {
-        "forced_theme": "VARCHAR",
         "market_data": "BOOLEAN NOT NULL DEFAULT 0",
         "cv_version_id": "INTEGER",
         "lane": "VARCHAR",

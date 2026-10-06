@@ -13,10 +13,10 @@ Two quirks confirmed by manual testing, not documented anywhere obvious:
    engineer") works. Treat `q` as one plain phrase, not a keyword-OR list.
 
 Because of (2) we can't do Adzuna's one-call-with-all-keywords-OR'd trick,
-and the free tier (250/month) can't cover one call per keyword per theme
-per day either. Instead: one call per theme per day, rotating through that
-theme's keyword list by day-of-year so every keyword gets tried eventually.
-5 themes x 1 call/day ~= 150 calls/month, well inside the free quota.
+and the free tier (250/month) can't cover one call per keyword per group
+per day either. Instead: one call per group per day, rotating through that
+group's keyword list by day-of-year so every keyword gets tried eventually.
+~6 groups x 1 call/day ~= 180 calls/month, well inside the free quota.
 """
 import os
 import re
@@ -37,8 +37,8 @@ class SerpApiNotConfigured(Exception):
     pass
 
 
-def fetch_theme(
-    theme_id: str,
+def fetch_group(
+    group: str,
     keywords: list[str],
     location: str = "Zurich, Switzerland",
     results: int = 10,
@@ -78,7 +78,7 @@ def fetch_theme(
                 "location": r.get("location"),
                 "level": detected.get("schedule_type"),
                 "posted_at": _parse_relative_posted(detected.get("posted_at")),
-                "theme_hint": theme_id,
+                "search_hint": group,
             }
         )
     return jobs

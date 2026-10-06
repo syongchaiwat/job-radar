@@ -39,12 +39,6 @@ def main():
     parser.add_argument("--title", default=None)
     parser.add_argument("--company", default=None)
     parser.add_argument("--location", default=None)
-    parser.add_argument("--theme", default=None, help="Theme code if known, e.g. 2 or 3a")
-    parser.add_argument(
-        "--force-theme",
-        choices=["1", "2", "3a", "3b", "4"],
-        help="Pin the job to a theme: screening skips the classifier (for postings it can't classify, e.g. workshops)",
-    )
     parser.add_argument("--no-fetch", action="store_true", help="Skip auto-fetch even if --description is omitted")
     args = parser.parse_args()
 
@@ -68,7 +62,6 @@ def main():
         title=title,
         company=company,
         location=location,
-        theme_hint=args.theme,
     )
 
     engine = init_db(get_engine())
@@ -76,7 +69,7 @@ def main():
         if is_duplicate(session, raw["url"]):
             print("Already in the DB, skipped.")
             return
-        job = create_manual_job(session, raw, forced_theme=args.force_theme)
+        job = create_manual_job(session, raw)
         label = job.title or "(untitled, needs Phase 2 normalize)"
         print(f"Added: {job.company} — {label}")
 

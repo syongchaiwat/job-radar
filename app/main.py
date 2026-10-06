@@ -3,7 +3,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Must run before any import that touches src.pipeline.llm_config, which reads
+# Must run before any import that touches src.llm.config, which reads
 # LLM_PROVIDER at import time -- without this the app silently falls back to
 # the Anthropic default and fails with an auth error instead of using Ollama.
 REPO_ROOT = Path(__file__).resolve().parent.parent

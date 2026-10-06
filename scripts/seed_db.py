@@ -4,7 +4,6 @@ Run standalone (`python scripts/seed_db.py`) to re-seed after editing seed-jobs.
 or via sync_profile.py which calls seed() after refreshing the file from the profile source.
 """
 import json
-import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,13 +20,8 @@ SEED_MD = REPO_ROOT / "data" / "seed-jobs.md"
 SEED_DESCRIPTIONS = REPO_ROOT / "data" / "seed_descriptions.json"
 LABELED_JSONL = REPO_ROOT / "evals" / "labeled_jobs.jsonl"
 
-EXPECTED_HEADERS = ["Company", "Role", "Theme", "Fit", "Level", "Location", "URL"]
+EXPECTED_HEADERS = ["Company", "Role", "Fit", "Level", "Location", "URL"]
 SEED_SOURCE_LABEL = "seed_2026-08-12"
-
-
-def _theme_code(theme_raw: str) -> str:
-    m = re.match(r"(none|\d[a-z]?)", theme_raw.strip().lower())
-    return m.group(1) if m else theme_raw.strip().lower()
 
 
 def _parse_table(md_text: str) -> list[dict]:
@@ -61,8 +55,6 @@ def seed():
     with Session(engine) as session:
         for row in rows:
             job_id = _job_id(row["URL"])
-            theme_raw = row["Theme"]
-            theme_code = _theme_code(theme_raw)
 
             existing = session.get(Job, job_id)
             job = existing or Job(id=job_id, source="seed", url=row["URL"])
@@ -79,8 +71,6 @@ def seed():
             if gt is None:
                 gt = GroundTruth(
                     job_id=job_id,
-                    theme_raw=theme_raw,
-                    theme_code=theme_code,
                     fit_raw=row["Fit"],
                     source=SEED_SOURCE_LABEL,
                     created_at=datetime.now(timezone.utc),
@@ -90,8 +80,6 @@ def seed():
                 # Still a seed label (never corrected by a user) -- safe to refresh
                 # from seed-jobs.md. A user_correction source is left untouched so a
                 # later dashboard correction can't be silently clobbered by a re-seed.
-                gt.theme_raw = theme_raw
-                gt.theme_code = theme_code
                 gt.fit_raw = row["Fit"]
                 session.add(gt)
 
@@ -100,8 +88,6 @@ def seed():
                     "job_id": job_id,
                     "company": row["Company"],
                     "title": row["Role"],
-                    "theme_code": theme_code,
-                    "theme_raw": theme_raw,
                     "fit_raw": row["Fit"],
                     "level": row["Level"],
                     "location": row["Location"],

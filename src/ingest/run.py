@@ -18,33 +18,33 @@ from sqlmodel import Session  # noqa: E402
 
 from src.db import Job, get_engine, init_db  # noqa: E402
 from src.ingest import adzuna, jsearch, serpapi  # noqa: E402
-from src.ingest.base import FetchTheme  # noqa: E402
+from src.ingest.base import FetchGroup  # noqa: E402
 from src.ingest.dedupe import is_duplicate, job_id  # noqa: E402
-from src.ingest.theme_keywords import load_theme_keywords  # noqa: E402
+from src.ingest.search_keywords import load_search_keywords  # noqa: E402
 
-SOURCES: list[tuple[str, FetchTheme]] = [
-    ("adzuna", adzuna.fetch_theme),
-    ("jsearch", jsearch.fetch_theme),
-    ("serpapi", serpapi.fetch_theme),
+SOURCES: list[tuple[str, FetchGroup]] = [
+    ("adzuna", adzuna.fetch_group),
+    ("jsearch", jsearch.fetch_group),
+    ("serpapi", serpapi.fetch_group),
 ]
 
 
 def run():
-    themes = load_theme_keywords()
     engine = init_db(get_engine())
 
     fetched = added = duplicates = skipped_sources = 0
 
     with Session(engine) as session:
-        for theme_id, keywords in themes.items():
+        groups = load_search_keywords(session)
+        for group, keywords in groups.items():
             if not keywords:
                 continue
 
             for source_name, fetch_fn in SOURCES:
                 try:
-                    raw_jobs = fetch_fn(theme_id, keywords)
+                    raw_jobs = fetch_fn(group, keywords)
                 except Exception as e:  # noqa: BLE001 -- one source failing must not abort the run
-                    print(f"  [{source_name}/{theme_id}] skipped: {e}")
+                    print(f"  [{source_name}/{group}] skipped: {e}")
                     skipped_sources += 1
                     continue
 
@@ -66,12 +66,12 @@ def run():
                         location=raw.get("location"),
                         level=raw.get("level"),
                         posted_at=raw.get("posted_at"),
-                        theme_hint=raw.get("theme_hint"),
+                        search_hint=raw.get("search_hint"),
                     )
                     session.add(job)
                     added += 1
                     new_here += 1
-                print(f"  [{source_name}/{theme_id}] {len(raw_jobs)} fetched, {new_here} new")
+                print(f"  [{source_name}/{group}] {len(raw_jobs)} fetched, {new_here} new")
 
         session.commit()
 

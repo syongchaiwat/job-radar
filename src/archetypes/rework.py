@@ -27,8 +27,8 @@ from src.archetypes.features import PoolJob, combined_matrix, compact_card, load
 from src.db import Archetype, ArchetypeSet, ClassifyRun, Job, RoleCard
 from src.enrich import enrich_job
 from src.enrich.enrich import ROLE_CARD_PROMPT_VERSION
-from src.pipeline.llm_call import call, load_prompt
-from src.pipeline.schemas import Reconciliation, SplitNaming
+from src.llm.call import call, load_prompt
+from src.llm.schemas import Reconciliation, SplitNaming
 
 SMALL_POOL = 40
 
@@ -105,7 +105,7 @@ def build_proposal(session: Session, progress=lambda msg: None) -> tuple[dict, i
     progress("Reconciling the two tracks (Opus)")
     current = current_archetypes(session)
     outliers = [compact_card(pj) for pj, l in zip(pool, t1["labels"]) if l < 0]
-    prompt = load_prompt("archetype_reconcile").format(
+    prompt = load_prompt("archetypes/reconcile").format(
         clusters=_clusters_text(pool, t1),
         taxonomy=track2.taxonomy_text(taxonomy),
         crosstab=_crosstab(pool, t1["labels"], t2_labels),
@@ -286,13 +286,13 @@ def edit_move(proposal: dict, job_id: str, target: str) -> None:
 
 def _describe(session: Session, situation: str, sources: list[dict], member_ids: list[str]):
     """Sonnet writes one name/definition/criteria/skills covering every source and member."""
-    from src.pipeline.schemas import ArchetypeDef
+    from src.llm.schemas import ArchetypeDef
 
     pool = load_jobs(session, member_ids)
     src = "\n\n".join(
         f"- {a['name']}: {a['definition']}\n  include: {a.get('include', '')}\n  exclude: {a.get('exclude', '')}" for a in sources
     )
-    prompt = load_prompt("archetype_merge").format(
+    prompt = load_prompt("archetypes/merge").format(
         situation=situation, sources=src, cards="\n".join(compact_card(pj) for pj in pool) or "(no jobs)"
     )
     parsed, _ = call("deep", prompt, ArchetypeDef, method="json_schema")
@@ -346,7 +346,7 @@ def edit_split(session: Session, proposal: dict, key: str) -> None:
     x = np.vstack([pj.vec for pj in pool])
     labels = KMeans(n_clusters=2, n_init=10, random_state=0).fit_predict(x)
     groups = [[pj for pj, l in zip(pool, labels) if l == g] for g in (0, 1)]
-    prompt = load_prompt("archetype_split").format(
+    prompt = load_prompt("archetypes/split").format(
         n=2,
         archetype=f"{target['name']}: {target['definition']}",
         groups="\n\n".join(f"Group {i + 1}:\n" + "\n".join(compact_card(pj) for pj in g) for i, g in enumerate(groups)),

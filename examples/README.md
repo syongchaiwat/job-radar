@@ -6,7 +6,7 @@ Everything in this folder describes **Alex Muster**, a made-up candidate, so a f
 
 ```
 <your folder>/
-  profile/            filters.md, constraints.md, projects.md, coursework.md, themes/theme-*.md
+  profile/            filters.md, constraints.md, lanes.md, motivation.md, projects.md, coursework.md
   seed-jobs.md        hand-labeled jobs (eval ground truth)
   seed_descriptions.json   optional: {job_id: description} for the seed jobs
   cv_profile/cv_template.md   optional: copied only if you don't have one locally yet
