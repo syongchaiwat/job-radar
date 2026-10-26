@@ -35,6 +35,7 @@ class Job(SQLModel, table=True):
     deadline: Optional[str] = None  # application deadline, ISO date (from the posting or set by you)
     cv_version_id: Optional[int] = None  # CV library choice for this job; None = latest CV of its archetype
     market_data: bool = False  # user switch: this posting shapes archetypes and market stats (independent of application status)
+    bookmarked: bool = False  # user marker to spot a job on the board
 
 
 class GroundTruth(SQLModel, table=True):
@@ -278,6 +279,8 @@ class CoverLetter(SQLModel, table=True):
     job_id: str = Field(foreign_key="job.id", index=True)
     cv_ref: Optional[str] = None  # "library:<CVVersion id>" or "job:<JobCV id>"
     body_markdown: str
+    header: Optional[str] = None  # your edit of the place/date + recipient lines (one per line); None = automatic
+    subject: Optional[str] = None  # your edit of the subject line; None = automatic
     verdict: str = "revise"
     honesty_score: Optional[int] = None
     relevance_score: Optional[int] = None
@@ -307,10 +310,15 @@ def get_engine(db_path: Optional[str] = None):
 _ADDED_COLUMNS = {
     "job": {
         "market_data": "BOOLEAN NOT NULL DEFAULT 0",
+        "bookmarked": "BOOLEAN NOT NULL DEFAULT 0",
         "cv_version_id": "INTEGER",
         "lane": "VARCHAR",
         "lane_source": "VARCHAR",
         "deadline": "VARCHAR",
+    },
+    "coverletter": {
+        "header": "VARCHAR",
+        "subject": "VARCHAR",
     },
 }
 

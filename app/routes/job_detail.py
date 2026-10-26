@@ -195,17 +195,30 @@ def write_letter(job_id: str, session: Session = Depends(get_session), seed_id: 
     return RedirectResponse(f"/jobs/{job_id}#cover-letter", status_code=303)
 
 
-@router.post("/jobs/letter/{letter_id}/edit")
-def edit_letter(letter_id: int, session: Session = Depends(get_session), body: str = Form(...)):
-    from src.letters import core as letters
-    from src.db import CoverLetter
+def _letter_and_job(session: Session, letter_id: int):
+    from src.db import CoverLetter, Job
 
-    base = session.get(CoverLetter, letter_id)
-    if base is None:
+    letter = session.get(CoverLetter, letter_id)
+    if letter is None:
         raise HTTPException(status_code=404, detail="Letter not found")
-    body = body.replace("\r\n", "\n").strip()
-    if body != base.body_markdown.strip():
-        letters.save_edit(session, base, body)
+    return letter, session.get(Job, letter.job_id)
+
+
+@router.post("/jobs/letter/{letter_id}/edit")
+def edit_letter(letter_id: int, session: Session = Depends(get_session), body: str = Form(...),
+                header: str = Form(""), subject: str = Form("")):
+    """Save body, header lines and subject as a new version. Header/subject equal to the
+    automatic ones are not stored, so they keep following the defaults (e.g. today's date)."""
+    from src.letters import core as letters
+
+    base, job = _letter_and_job(session, letter_id)
+    norm = lambda t: t.replace("\r\n", "\n").strip()  # noqa: E731
+    body, header, subject = norm(body), norm(header), norm(subject)
+    auto_header, auto_subject = letters.default_header(job), letters._subject(session, job)
+    new_header = header if header and header != auto_header else None
+    new_subject = subject if subject and subject != auto_subject else None
+    if (body, new_header, new_subject) != (base.body_markdown.strip(), base.header, base.subject):
+        letters.save_edit(session, base, body, new_header, new_subject)
     return RedirectResponse(f"/jobs/{base.job_id}#cover-letter", status_code=303)
 
 
@@ -221,8 +234,9 @@ def letter_pdf(letter_id: int, session: Session = Depends(get_session)):
     if letter is None:
         raise HTTPException(status_code=404, detail="Letter not found")
     job = session.get(Job, letter.job_id)
-    out = P(tempfile.mkdtemp()) / f"Cover_letter_{(job.company or 'job').replace(' ', '_')}.pdf"
+    name = f"Cover letter {job.title}, {job.company}".replace("/", "-")
+    out = P(tempfile.mkdtemp()) / f"{name}.pdf"
     from src.cv.pdf import letter_to_pdf
 
-    letter_to_pdf(*letters.pdf_parts(job, letter), out)
+    letter_to_pdf(letters.pdf_parts(session, job, letter), out)
     return FileResponse(out, media_type="application/pdf", filename=out.name)

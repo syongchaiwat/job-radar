@@ -8,7 +8,7 @@ const SORTS = {
   match: "Best match",
   archetype: "Archetype",
   status: "Status",
-  cv: "CV verdict",
+  cv: "Edited CV first",
 };
 
 const MARKET_FILTERS = {
@@ -124,6 +124,15 @@ function board() {
     },
     toggleMarket(jobId) {
       this.setMarket([jobId], !this.marketOn(jobId));
+    },
+    // --- bookmarks: a star to spot jobs on the board ---
+    bookmarked(jobId) {
+      return !!this.job(jobId).bookmarked;
+    },
+    async toggleBookmark(jobId) {
+      const value = !this.bookmarked(jobId);
+      const res = await fetch(`/jobs/${jobId}/bookmark`, { method: "POST", body: new URLSearchParams({ value: value ? "1" : "0" }) });
+      if (res.ok) this.job(jobId).bookmarked = value;
     },
     // Select mode: clicking a card toggles it instead of opening the job.
     cardClick(event, jobId) {

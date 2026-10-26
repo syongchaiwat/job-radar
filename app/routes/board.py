@@ -1,4 +1,4 @@
-"""Board page: GET /, POST /jobs/add, POST /jobs/market-data"""
+"""Board page: GET /, POST /jobs/add, POST /jobs/market-data, POST /jobs/{job_id}/bookmark"""
 import json
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -49,6 +49,7 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
                 "match_level": row["screening"].match_level if row["screening"] else None,
                 "own_cv": row["own_cv"],
                 "market_data": bool(row["job"].market_data),
+                "bookmarked": bool(row["job"].bookmarked),
                 "priority": row["priority"],
                 "lane": row["job"].lane or "none",
                 "archetype": str(assignments[row["job"].id]["primary"].archetype_id) if assignments.get(row["job"].id, {}).get("primary") else "none",
@@ -159,3 +160,15 @@ def set_market_data(session: Session = Depends(get_session), job_ids: list[str] 
             updated += 1
     session.commit()
     return JSONResponse({"updated": updated, "market_data": flag})
+
+
+@router.post("/jobs/{job_id}/bookmark")
+def set_bookmark(job_id: str, session: Session = Depends(get_session), value: str = Form(...)):
+    """Bookmark on/off (board card star)."""
+    job = session.get(Job, job_id)
+    if job is None:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    job.bookmarked = value == "1"
+    session.add(job)
+    session.commit()
+    return JSONResponse({"bookmarked": job.bookmarked})

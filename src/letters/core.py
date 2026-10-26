@@ -110,8 +110,10 @@ def generate(session: Session, job: Job, seed: CoverLetter | None = None) -> Cov
     return letter
 
 
-def save_edit(session: Session, base: CoverLetter, body: str) -> CoverLetter:
-    letter = CoverLetter(job_id=base.job_id, cv_ref=base.cv_ref, body_markdown=body, verdict=base.verdict,
+def save_edit(session: Session, base: CoverLetter, body: str, header: str | None = None, subject: str | None = None) -> CoverLetter:
+    """A hand edit becomes a new version. header/subject are stored only when they differ
+    from the automatic ones (so an untouched header keeps today's date)."""
+    letter = CoverLetter(job_id=base.job_id, cv_ref=base.cv_ref, body_markdown=body, header=header, subject=subject, verdict=base.verdict,
                          honesty_score=base.honesty_score, relevance_score=base.relevance_score,
                          specificity_score=base.specificity_score, tone_score=base.tone_score,
                          feedback=base.feedback, attempt_count=base.attempt_count, model_used=MANUAL_EDIT, tokens=0)
@@ -125,14 +127,70 @@ def letters_for(session: Session, job_id: str) -> list[CoverLetter]:
     return session.exec(select(CoverLetter).where(CoverLetter.job_id == job_id).order_by(CoverLetter.id)).all()
 
 
-def pdf_parts(job: Job, letter: CoverLetter) -> tuple[str, list[str], str]:
-    """(CV header markdown, date/recipient lines, body) for cv_pdf.letter_to_pdf."""
+_SIGNOFF = re.compile(r"\n+\s*((?:Kind|Best|Warm) regards|Sincerely|Yours sincerely)[,.]?\s*(?:\n.*)?$", re.S | re.I)
+
+
+def _contact(session=None) -> dict:
+    """Name and contact details from the CV template header (never hard-coded)."""
+    text = library.TEMPLATE.read_text() if library.TEMPLATE.exists() else ""
+    field = lambda label: (re.search(rf"{label}:\s*([^·\n]+)", text) or [None, ""])[1].strip()  # noqa: E731
+    name = (re.search(r"^# (.+)$", text, re.M) or [None, ""])[1].strip()
+    address = field("Address")
+    m = re.search(r"\d{4,5}\s+([^,]+),\s*(.+)$", address)  # "8055 Zürich, Switzerland" -> city, country
+    city, country = (m.group(1).strip(), m.group(2).strip()) if m else ("", "")
+    return {"name": name, "city": city, "country": country, "phone": field("Phone").replace("-", " "),
+            "email": field("Email"), "website": field("Website")}
+
+
+def _subject(session: Session, job: Job) -> str:
+    """'Application: <role> (6 months, from 1 February 2027)' from the role card's timeline signals."""
+    from src.db import RoleCard
+
+    card = session.get(RoleCard, job.id)
+    sig = json.loads(card.lane_signals or "{}") if card else {}
+    bits = []
+    if sig.get("duration_months"):
+        bits.append(f"{sig['duration_months']} months")
+    start = (sig.get("start_date") or "").strip()
+    if start and start.lower() not in ("asap", "immediately", "by agreement", "none"):
+        bits.append(("from " if start[:1].isdigit() else "starting ") + start)
+    return f"Application: {job.title}" + (f" ({', '.join(bits)})" if bits else "")
+
+
+def default_header(job: Job) -> str:
+    """Place and date, then the recipient lines."""
     from datetime import date
 
-    header = ""
-    if library.TEMPLATE.exists():
-        text = re.sub(r"^---.*?---\s*", "", library.TEMPLATE.read_text(), flags=re.S)
-        m = re.search(r"^# .+?(?=\n<!--|\n## )", text, re.S | re.M)
-        header = m.group(0).strip() if m else ""
-    meta = [date.today().strftime("%d %B %Y"), f"**{job.company}**" + (f", {job.location}" if job.location else ""), f"Re: {job.title}"]
-    return header, meta, letter.body_markdown
+    today = date.today()
+    return "\n".join([f"{_contact()['city'] or 'Zürich'}, {today.day} {today.strftime('%B %Y')}", job.company or "", "Human Resources"])
+
+
+def pdf_parts(session: Session, job: Job, letter: CoverLetter, body: str | None = None,
+              header: str | None = None, subject: str | None = None) -> dict:
+    """Everything the letter template needs: header lines (place/date, recipient), subject,
+    body (greeting to last paragraph), sign-off and contact footer. body/header/subject
+    override the saved letter (live preview while editing)."""
+    c = _contact()
+    body = (letter.body_markdown if body is None else body).strip()
+    header = header if header is not None else (letter.header or default_header(job))
+    subject = subject if subject is not None else (letter.subject or _subject(session, job))
+    m = _SIGNOFF.search(body)
+    signoff = (m.group(1) + ",") if m else "Kind regards,"
+    if m:
+        body = body[:m.start()].rstrip()
+    return {
+        "header": [ln.strip() for ln in header.replace("\r\n", "\n").split("\n")],
+        "subject": subject.strip(),
+        "body": body,
+        "signoff": signoff,
+        "name": c["name"],
+        "contact": [" ".join(x for x in (", ".join(y for y in (c["city"], c["country"]) if y), c["phone"]) if x),
+                    " ".join(x for x in (c["email"], c["website"]) if x)],
+    }
+
+
+def full_markdown(parts: dict) -> str:
+    """The whole letter as Markdown for the job page preview: same parts as the PDF."""
+    lines = lambda xs: "\n".join(x for x in xs if x)  # noqa: E731 (rendered with breaks: true)
+    return "\n\n".join(x for x in [lines(parts["header"]), f"**{parts['subject']}**" if parts["subject"] else "",
+                                    parts["body"], parts["signoff"], lines([parts["name"], *parts["contact"]])] if x)

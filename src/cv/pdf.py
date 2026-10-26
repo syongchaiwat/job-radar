@@ -298,24 +298,35 @@ def _print(page_html: str, out_path: Path, timeout: float = 60) -> Path:
 
 
 LETTER_CSS = """
-.letter-meta { margin: 14pt 0 10pt; line-height: 1.5; }
-.letter-body p { margin: 0 0 9pt; line-height: 1.5; text-align: left; }
-.letter-body { padding-right: 18pt; }
+@page { size: A4; margin: 0; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Times New Roman", Times, serif; font-size: 12pt; line-height: 1.32; color: #000; }
+.page { padding: 30mm 24mm 20mm 25mm; }
+.head div, .foot div { margin: 0; }
+.subject { font-weight: bold; margin: 15mm 0 4mm; }
+.body p { margin: 0 0 4mm; }
+.signoff { margin: 0 0 13mm; }
+a { color: #1155cc; text-decoration: underline; }
 """
+_BARE_LINK = re.compile(r"(?<![<(\[/\w])(https?://[^\s<>()]+[^\s<>().,;:!?]|[\w.+-]+@[\w-]+\.[\w.-]+\w)")
 
 
-def letter_to_pdf(header_markdown: str, meta_lines: list[str], body_markdown: str, out_path: Path) -> Path:
-    """Cover letter page: the CV header (name, contacts, photo), then date/recipient lines, then the body
-    as normal paragraphs. Shares style.css so letter and CV look like one set."""
-    lines = [ln.strip() for ln in header_markdown.splitlines() if ln.strip()]
-    name = lines[0][2:].strip() if lines and lines[0].startswith("# ") else ""
-    header = _header(name, lines[1:]) if name else ""
-    meta = "".join(f"<div>{_linked(m)}</div>" for m in meta_lines)
-    body = MarkdownIt("commonmark", {"html": False, "breaks": True}).render(body_markdown)  # keep "Kind regards,\nName"
-    page = (
+def letter_html(parts: dict) -> str:
+    """One-page Swiss-style letter: header lines (place/date, recipient), bold subject, body,
+    sign-off, then name and contact lines. Bare URLs and emails become links."""
+    esc = html.escape
+    md = MarkdownIt("commonmark", {"html": False, "breaks": True})
+    body = md.render(_BARE_LINK.sub(r"<\1>", parts["body"]))
+    head = "".join(f"<div>{esc(x) or '&nbsp;'}</div>" for x in parts["header"])
+    foot = f"<div>{esc(parts['name'])}</div>" + "".join(f"<div>{_linked(x)}</div>" for x in parts["contact"] if x)
+    return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
-        '<link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;1,400;1,700&display=block" rel="stylesheet">'
-        f"<style>{STYLE_PATH.read_text()}{LETTER_CSS}</style></head><body>"
-        f'{header}<div class="letter-meta">{meta}</div><div class="letter-body">{body}</div></body></html>'
+        f"<style>{LETTER_CSS}</style></head><body><div class=\"page\">"
+        f'<div class="head">{head}</div><div class="subject">{esc(parts["subject"])}</div>'
+        f'<div class="body">{body}</div><div class="signoff">{esc(parts["signoff"])}</div>'
+        f'<div class="foot">{foot}</div></div></body></html>'
     )
-    return _print(page, Path(out_path))
+
+
+def letter_to_pdf(parts: dict, out_path: Path) -> Path:
+    return _print(letter_html(parts), Path(out_path))

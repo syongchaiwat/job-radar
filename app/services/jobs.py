@@ -219,5 +219,8 @@ def _lane_bundle(session: Session, job: Job) -> dict:
         "job_lane": lane_by_key(job.lane),
         "lane_assessment": r["assessment"],
         "fit": r["fit"], "urgency": r["urgency"], "urgency_note": r["urgency_note"], "priority": r["priority"],
-        "cover_letters": letters.letters_for(session, job.id),
+        "cover_letters": (cl := letters.letters_for(session, job.id)),
+        "letter_header": (cl[-1].header or letters.default_header(job)) if cl else "",
+        "letter_subject": (cl[-1].subject or letters._subject(session, job)) if cl else "",
+        "letter_preview": letters.full_markdown(letters.pdf_parts(session, job, cl[-1])) if cl else "",
     }
