@@ -1,0 +1,105 @@
+{# Board table view: one row per visible job, rendered client-side from jobs-data so
+   sorting and inline status changes need no reload. Mainly for tracking applications. #}
+<div x-show="view === 'table'" x-cloak class="bg-gray-900/50 border border-gray-800 rounded-xl overflow-hidden">
+  <div class="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-gray-800">
+    <h2 class="text-lg font-semibold">Application tracking</h2>
+    <span class="label-mono text-xs bg-accent-dim/20 text-accent rounded-md px-2 py-0.5" x-text="visible.length + ' rows'"></span>
+    <span class="label-mono text-xs text-gray-500 ml-auto" x-text="'Sort: ' + sorts[sort]"></span>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm min-w-[920px]">
+      <thead>
+        <tr class="text-left border-b border-gray-800 bg-gray-950/40">
+          <th class="w-10 px-3 py-3"></th>
+          <th class="px-3 py-3 text-xs uppercase tracking-wide font-medium text-gray-500">Company &amp; role</th>
+          <th class="px-3 py-3 text-xs uppercase tracking-wide font-medium text-gray-500">Stage</th>
+          <th class="px-3 py-3 text-xs uppercase tracking-wide font-medium text-gray-500">Timeline</th>
+          <th class="px-3 py-3 text-xs uppercase tracking-wide font-medium text-gray-500">Fit</th>
+          <th class="px-3 py-3 text-xs uppercase tracking-wide font-medium text-gray-500">CV</th>
+          <th class="px-3 py-3 text-xs uppercase tracking-wide font-medium text-gray-500 text-right">Priority</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="j in sortedVisible" :key="j.job_id">
+          <tr class="border-b border-gray-800/70 last:border-0 hover:bg-gray-800/30 align-top"
+              :class="[isSelected(j.job_id) ? 'bg-accent-dim/10' : '', config.archived.includes(j.status) ? 'opacity-60' : '']"
+              @click="if (selecting) cardClick($event, j.job_id)">
+            <td class="px-3 py-4">
+              <button type="button" @click.stop="toggleBookmark(j.job_id)" :title="j.bookmarked ? 'Remove bookmark' : 'Bookmark'"
+                      :class="j.bookmarked ? 'text-accent' : 'text-gray-700 hover:text-gray-400'">
+                <svg width="14" height="18" viewBox="0 0 20 26" aria-hidden="true">
+                  <path d="M1 0h18v25l-9-6.5L1 25z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" :fill="j.bookmarked ? 'currentColor' : 'none'"/>
+                </svg>
+              </button>
+            </td>
+            <td class="px-3 py-4">
+              <div class="flex gap-3">
+                <span class="shrink-0 w-10 h-10 rounded-md bg-gray-800 border border-gray-700 flex items-center justify-center font-display font-bold text-gray-300" x-text="initials(j.company)"></span>
+                <div class="min-w-0">
+                  <p class="label-mono text-[11px] uppercase text-gray-500 truncate">
+                    <span class="text-gray-400" x-text="j.company"></span><span x-show="j.location" x-text="' • ' + j.location"></span>
+                  </p>
+                  <a :href="'/jobs/' + j.job_id" @click="if (selecting) $event.preventDefault()" class="font-display font-semibold text-[15px] text-gray-100 hover:text-accent" x-text="j.title"></a>
+                  <div class="flex flex-wrap gap-1.5 mt-1.5 label-mono text-[11px]">
+                    <span x-show="j.archetype_name" class="bg-gray-800 text-accent rounded px-1.5 py-0.5" x-text="j.archetype_name"></span>
+                    <span x-show="!j.archetype_name" class="bg-amber-500/10 text-amber-300 rounded px-1.5 py-0.5">no archetype</span>
+                    <span x-show="j.lane_name" class="text-gray-400 px-1 py-0.5" x-text="j.lane_name"></span>
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td class="px-3 py-4">
+              <select :value="j.status" @change="setStatus(j, $event.target.value)" @click.stop
+                      :class="stageClass(j.status)" class="label-mono text-xs rounded-md border px-2 py-1.5 cursor-pointer focus:outline-none">
+                <template x-for="s in config.statusOrder" :key="s">
+                  <option :value="s" :selected="s === j.status" x-text="config.statusLabels[s]" class="bg-gray-900 text-gray-100"></option>
+                </template>
+              </select>
+              <p x-show="j.notes" class="text-xs text-gray-500 mt-2 max-w-[14rem] line-clamp-2" :title="j.notes" x-text="j.notes"></p>
+            </td>
+            <td class="px-3 py-4 label-mono text-xs tabular whitespace-nowrap">
+              <template x-if="j.applied_at">
+                <div>
+                  <p class="text-gray-200">Applied <span x-text="fmtDate(j.applied_at)"></span></p>
+                  <p class="text-gray-500" x-text="daysAgo(j.applied_at) + (daysAgo(j.applied_at) === 1 ? ' day' : ' days') + ' elapsed'"></p>
+                  <div class="h-1 w-28 bg-gray-800 rounded-full mt-2 overflow-hidden"><div class="h-full rounded-full" :class="barClass(j.status)" :style="'width:' + elapsedPct(j.applied_at) + '%'"></div></div>
+                </div>
+              </template>
+              <template x-if="!j.applied_at">
+                <div>
+                  <p class="text-gray-300">Added <span x-text="fmtDate(j.first_seen)"></span></p>
+                  <p x-show="j.status !== 'new' && j.status_since" class="text-gray-500" x-text="config.statusLabels[j.status] + ' since ' + fmtDate(j.status_since)"></p>
+                </div>
+              </template>
+              <p x-show="j.deadline" class="text-amber-300 mt-1" x-text="'Deadline ' + j.deadline"></p>
+            </td>
+            <td class="px-3 py-4 label-mono text-xs">
+              <p x-show="j.match_level" :class="['strong', 'good'].includes(j.match_level) ? 'text-green-300' : 'text-gray-400'" class="flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full" :class="['strong', 'good'].includes(j.match_level) ? 'bg-green-400' : 'bg-gray-500'"></span>
+                <span x-text="cap(j.match_level)"></span>
+              </p>
+              <p x-show="!j.match_level" class="text-gray-600">Not screened</p>
+              <p x-show="j.eligible === 'no'" class="text-amber-300 mt-1">Not eligible</p>
+              <p x-show="j.excluded" class="text-red-300 mt-1">Excluded</p>
+            </td>
+            <td class="px-3 py-4 text-xs whitespace-nowrap">
+              <a :href="'/jobs/' + j.job_id + '/cv/pdf'" @click.stop class="inline-flex items-center gap-1.5 hover:text-accent" :class="j.own_cv ? 'text-gray-200' : 'text-gray-400'">
+                <svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M2 1h5l3 3v9H2z"/><path d="M7 1v3h3"/></svg>
+                <span x-text="j.own_cv ? 'Edited for this job' : 'Library CV'"></span>
+              </a>
+            </td>
+            <td class="px-3 py-4 text-right">
+              <span class="label-mono text-xs bg-gray-800 text-gray-200 rounded px-2 py-1 tabular" title="fit x lane value x urgency" x-text="'P' + Math.round((j.priority || 0) * 100)"></span>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+  <div class="flex flex-wrap items-center gap-x-5 gap-y-1 px-5 py-3 border-t border-gray-800 label-mono text-xs text-gray-500">
+    <span x-text="visible.length + ' rows'"></span>
+    <span class="text-green-300" x-text="count('applied') + ' applied'"></span>
+    <span class="text-amber-300" x-text="(count('in-process') + count('offer')) + ' in process / offers'"></span>
+    <span class="text-red-300" x-text="count('rejected') + ' rejected'"></span>
+  </div>
+</div>

@@ -5,6 +5,8 @@ unique constraint by design (multiple runs per job are allowed, e.g. after
 a prompt fix and a targeted re-screen), so a naive join would show
 duplicate/stale cards the moment a job gets re-screened.
 """
+from datetime import datetime, timezone
+
 from sqlmodel import Session, select
 
 from src.db import Archetype, ArchetypeSet, GroundTruth, JobCV, Job, JobArchetype, JobSkill, RoleCard, Screening, Skill, Tracking
@@ -57,6 +59,17 @@ def list_board_rows(session: Session) -> list[dict]:
         }
         for job in jobs
     ]
+
+
+def set_tracking_status(session: Session, job_id: str, status: str) -> Tracking:
+    """Change a job's status; the first move to "applied" stamps applied_at."""
+    tr = _ensure_tracking(session, job_id)
+    tr.status = status
+    if status == "applied" and tr.applied_at is None:
+        tr.applied_at = datetime.now(timezone.utc)
+    tr.updated_at = datetime.now(timezone.utc)
+    session.add(tr)
+    return tr
 
 
 def get_job_bundle(session: Session, job_id: str) -> dict | None:
@@ -224,3 +237,23 @@ def _lane_bundle(session: Session, job: Job) -> dict:
         "letter_subject": (cl[-1].subject or letters._subject(session, job)) if cl else "",
         "letter_preview": letters.full_markdown(letters.pdf_parts(session, job, cl[-1])) if cl else "",
     }
+
+
+def enrich_and_match(session: Session, job: Job, force: bool = False) -> str | None:
+    """Role card + skills + embedding, then archetype and lane. Returns an error message
+    instead of raising, so a failed LLM call never blocks the caller (the job page offers a retry)."""
+    from src.archetypes.commit import assign_job
+    from src.enrich import enrich_job
+    from src.lanes.core import assess_job
+
+    try:
+        enrich_job(session, job, force=force)
+        session.commit()
+        assign_job(session, job.id)
+        session.commit()
+        assess_job(session, job)
+        session.commit()
+        return None
+    except Exception as exc:  # shown on the job page with a retry button
+        session.rollback()
+        return f"{type(exc).__name__}: {exc}"[:300]

@@ -41,7 +41,9 @@ function board() {
     marketFilters: MARKET_FILTERS,
     selecting: false,
     selected: [],
+    view: "cards",
     init() {
+      try { this.view = localStorage.getItem("board.view") || "cards"; } catch (e) {}
       const el = document.getElementById("jobs-data");
       this.jobs = el ? JSON.parse(el.textContent) : [];
       const cfg = document.getElementById("board-config");
@@ -98,8 +100,66 @@ function board() {
     },
     pillClass(active) {
       return active
-        ? "bg-accent/20 border-accent text-accent"
-        : "border-gray-700 text-gray-400 hover:border-gray-500";
+        ? "bg-accent-dim/20 border-accent-dim/60 text-accent"
+        : "border-gray-800 text-gray-400 hover:border-gray-600 hover:text-gray-200";
+    },
+    count(status) {
+      return this.jobs.filter((j) => j.status === status).length;
+    },
+    // --- view toggle: cards (triage) or tracking table (applications) ---
+    setView(v) {
+      this.view = v;
+      try { localStorage.setItem("board.view", v); } catch (e) {}
+    },
+    get sortedVisible() {
+      return [...this.visible].sort((a, b) => this.compare(a, b));
+    },
+    initials(name) {
+      const words = (name || "?").replace(/[^\p{L}\p{N} ]/gu, " ").split(/\s+/).filter(Boolean);
+      return (words.length > 1 ? words[0][0] + words[1][0] : (words[0] || "?").slice(0, 2)).toUpperCase();
+    },
+    cap(s) {
+      return s ? s[0].toUpperCase() + s.slice(1) : "";
+    },
+    // Timestamps come from SQLite without a zone; they are UTC.
+    toDate(iso) {
+      return new Date(/[zZ]|[+-]\d\d:\d\d$/.test(iso) ? iso : iso + "Z");
+    },
+    fmtDate(iso) {
+      if (!iso) return "";
+      const d = this.toDate(iso);
+      const opts = { day: "numeric", month: "short" };
+      if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
+      return d.toLocaleDateString("en-GB", opts);
+    },
+    daysAgo(iso) {
+      return Math.max(0, Math.floor((Date.now() - this.toDate(iso)) / 86400000));
+    },
+    elapsedPct(iso) {
+      return Math.min(100, Math.round((this.daysAgo(iso) / 30) * 100));
+    },
+    stageClass(status) {
+      return {
+        new: "bg-accent-dim/15 border-accent-dim/40 text-accent",
+        shortlist: "bg-accent-dim/15 border-accent-dim/40 text-accent",
+        applied: "bg-green-500/15 border-green-500/40 text-green-300",
+        "in-process": "bg-amber-500/15 border-amber-500/40 text-amber-300",
+        offer: "bg-amber-500/25 border-amber-400/60 text-amber-200",
+        rejected: "bg-red-500/10 border-red-500/40 text-red-300",
+        ignored: "bg-gray-800 border-gray-700 text-gray-400",
+      }[status] || "bg-gray-800 border-gray-700 text-gray-300";
+    },
+    barClass(status) {
+      return { applied: "bg-green-400", "in-process": "bg-amber-400", offer: "bg-amber-300", rejected: "bg-red-400" }[status] || "bg-accent-dim";
+    },
+    async setStatus(j, status) {
+      const prev = j.status;
+      j.status = status;
+      const res = await fetch(`/jobs/${j.job_id}/status`, { method: "POST", body: new URLSearchParams({ status }) });
+      if (!res.ok) { j.status = prev; return; }
+      const data = await res.json();
+      j.applied_at = data.applied_at;
+      j.status_since = data.status_since;
     },
     subtitle() {
       const total = this.jobs.length;

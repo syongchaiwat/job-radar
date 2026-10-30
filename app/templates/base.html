@@ -4,14 +4,32 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}job-radar{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
   <script>
+    // Design system: indigo primary, emerald secondary, amber tertiary, navy neutrals.
+    // "gray" is remapped to the navy neutral scale so every existing gray-* class follows the theme.
     tailwind.config = {
       theme: {
         extend: {
           colors: {
-            accent: { DEFAULT: '#a78bfa', dim: '#7c5cd8' }
-          }
+            accent: { DEFAULT: '#a5b4fc', dim: '#6366f1', soft: '#c7cbfb', ink: '#1e1b6b' },
+            gray: {
+              50: '#f4f6fb', 100: '#e9ecf4', 200: '#d6dae6', 300: '#b9bfd0', 400: '#9199ae',
+              500: '#6d758b', 600: '#4e566c', 700: '#363d52', 800: '#262c3f', 900: '#181d2e', 950: '#0f1324',
+            },
+            green: {
+              300: '#6ee7b7', 400: '#34d399', 500: '#10b981', 600: '#059669', 700: '#047857', 800: '#065f46', 900: '#064e3b',
+            },
+          },
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            display: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+          },
+          borderRadius: { lg: '0.875rem', xl: '1.125rem' },
         }
       }
     }
@@ -26,16 +44,32 @@
     .htmx-show-on-request { display: none; }
     .htmx-request .htmx-show-on-request { display: inline; }
     .htmx-request .htmx-hide-on-request { display: none; }
+    h1, h2, h3, .font-display { font-family: "Plus Jakarta Sans", Inter, sans-serif; letter-spacing: -0.01em; }
+    /* Small uppercase labels and chips use the mono label face. */
+    .uppercase.tracking-wide, .label-mono { font-family: "JetBrains Mono", ui-monospace, monospace; letter-spacing: 0.06em; }
+    .tabular { font-variant-numeric: tabular-nums; }
+    ::selection { background: #6366f1; color: #fff; }
   </style>
 </head>
-<body class="bg-gray-950 text-gray-100 min-h-screen">
-  <nav class="border-b border-gray-800 px-4 sm:px-8 py-3 flex items-center gap-6 text-sm">
-    <a href="/" class="font-semibold text-gray-100">📡 job-radar</a>
-    <a href="/" class="text-gray-400 hover:text-gray-100">Board</a>
-    <a href="/classify" class="text-gray-400 hover:text-gray-100">Classify</a>
-    <a href="/market" class="text-gray-400 hover:text-gray-100">Market</a>
-    <a href="/cvs" class="text-gray-400 hover:text-gray-100">CV library</a>
-    <a href="/skills" class="text-gray-400 hover:text-gray-100">Skills</a>
+<body class="bg-gray-950 text-gray-100 min-h-screen antialiased">
+  {% set path = request.url.path %}
+  <nav class="sticky top-0 z-30 bg-gray-950/90 backdrop-blur border-b border-gray-800 px-4 sm:px-8 py-3 flex items-center gap-1 sm:gap-2 text-sm overflow-x-auto">
+    <a href="/" class="flex items-center gap-2 mr-4 shrink-0">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true" class="text-accent-dim">
+        <circle cx="13" cy="13" r="11.5" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".5"/>
+        <circle cx="13" cy="13" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".8"/>
+        <circle cx="13" cy="13" r="2" fill="#a5b4fc"/>
+        <path d="M13 13 22 5" stroke="#a5b4fc" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      <span class="font-display font-bold text-lg text-gray-100">job-radar</span>
+    </a>
+    {% for href, label in [("/", "Board"), ("/classify", "Classify"), ("/market", "Market"), ("/cvs", "CV library"), ("/skills", "Skills")] %}
+    {% set on = (path == "/" or path.startswith("/jobs")) if href == "/" else path.startswith(href) %}
+    <a href="{{ href }}" class="shrink-0 rounded-md px-3 py-1.5 {% if on %}bg-gray-800 text-gray-100{% else %}text-gray-400 hover:text-gray-100 hover:bg-gray-900{% endif %}">{{ label }}</a>
+    {% endfor %}
+    <span class="ml-auto shrink-0 hidden md:inline-flex items-center gap-2 border border-gray-800 rounded-md px-3 py-1 label-mono text-xs text-gray-400">
+      <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>{{ request.url.netloc }}
+    </span>
   </nav>
   <main class="px-4 sm:px-8 py-6 max-w-7xl mx-auto">
     {% block content %}{% endblock %}

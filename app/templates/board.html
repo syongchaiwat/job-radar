@@ -5,76 +5,98 @@
   <script type="application/json" id="jobs-data">{{ jobs_json | safe }}</script>
   <script type="application/json" id="board-config">{{ board_config | safe }}</script>
 
-  <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-4">
+  <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-5">
     <div>
-      <h1 class="text-3xl font-bold">Board</h1>
-      <p class="text-gray-400 text-sm mt-1" x-text="subtitle()"></p>
+      <p class="label-mono text-xs uppercase text-gray-500 mb-1">Pipeline <span class="text-gray-700 mx-1">•</span> <span class="text-gray-400" x-text="jobs.length + ' tracked'"></span></p>
+      <h1 class="text-3xl sm:text-4xl font-bold">Board</h1>
+      <div class="flex flex-wrap gap-2 mt-3 label-mono text-xs">
+        <span class="bg-gray-900 border border-gray-800 text-gray-300 rounded-md px-2.5 py-1" x-text="visible.length + ' shown of ' + jobs.length"></span>
+        <button @click="statusFilter = 'review'" class="bg-accent-dim/20 text-accent rounded-md px-2.5 py-1 hover:bg-accent-dim/30" x-text="count('new') + ' need review'"></button>
+        <button @click="statusFilter = 'progress'" class="bg-green-500/15 text-green-300 rounded-md px-2.5 py-1 hover:bg-green-500/25" x-text="count('applied') + ' applied'"></button>
+        <button @click="statusFilter = 'progress'" class="bg-amber-500/15 text-amber-300 rounded-md px-2.5 py-1 hover:bg-amber-500/25" x-text="(count('in-process') + count('offer')) + ' in process / offers'"></button>
+      </div>
     </div>
-    <div class="flex items-center gap-2">
-      <input type="text" x-model="search" placeholder="Search company or title"
-             class="bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm w-full sm:w-56">
-      <button @click="showExcluded = !showExcluded"
-              :class="showExcluded ? 'border-accent text-accent' : 'border-gray-700 text-gray-300'"
-              class="border rounded px-3 py-1.5 text-sm whitespace-nowrap">
-        <span x-text="showExcluded ? 'Hide excluded' : 'Show excluded'"></span>
-      </button>
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="inline-flex bg-gray-900 border border-gray-800 rounded-md p-0.5 text-sm" role="group" aria-label="Board view">
+        <button @click="setView('cards')" :class="view === 'cards' ? 'bg-gray-800 text-gray-100' : 'text-gray-400 hover:text-gray-200'"
+                class="flex items-center gap-2 rounded px-3 py-1.5">
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="1" width="5" height="5" rx="1"/><rect x="8" y="1" width="5" height="5" rx="1"/><rect x="1" y="8" width="5" height="5" rx="1"/><rect x="8" y="8" width="5" height="5" rx="1"/></svg>
+          Cards
+        </button>
+        <button @click="setView('table')" :class="view === 'table' ? 'bg-gray-800 text-gray-100' : 'text-gray-400 hover:text-gray-200'"
+                class="flex items-center gap-2 rounded px-3 py-1.5">
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="1.5" width="12" height="11" rx="1.5"/><path d="M1 5h12M1 8.5h12M5 5v7.5"/></svg>
+          Tracking table
+        </button>
+      </div>
+      <button x-show="!selecting" @click="selecting = true" class="border border-gray-800 bg-gray-900 rounded-md px-3 py-1.5 text-sm text-gray-300 hover:border-gray-600">Select jobs</button>
     </div>
   </div>
 
   {% include "partials/_add_job.html" %}
 
-  <div class="flex flex-wrap items-center gap-2 mb-3">
-    <span class="text-xs uppercase tracking-wide text-gray-500 w-14">Show</span>
-    <template x-for="(label, key) in statusFilters" :key="key">
-      <button @click="statusFilter = key" :class="pillClass(statusFilter === key)"
-              class="border rounded-full px-3 py-1 text-sm" x-text="label"></button>
-    </template>
-  </div>
-  <div class="flex flex-wrap items-center gap-2 mb-3">
-    <span class="text-xs uppercase tracking-wide text-gray-500 w-14">Lane</span>
-    <button @click="activeLane='all'" :class="pillClass(activeLane === 'all')" class="border rounded-full px-3 py-1 text-sm">All</button>
-    {% for key, label in lane_pills %}
-    <button @click="activeLane='{{ key }}'" :class="pillClass(activeLane === '{{ key }}')" class="border rounded-full px-3 py-1 text-sm">{{ label }}</button>
-    {% endfor %}
-  </div>
-  <div class="flex flex-wrap items-center gap-2 mb-3">
-    <span class="text-xs uppercase tracking-wide text-gray-500 w-14">Archetype</span>
-    <button @click="activeArchetype='all'" :class="pillClass(activeArchetype === 'all')" class="border rounded-full px-3 py-1 text-sm">All</button>
-    {% for aid, label in archetype_pills %}
-    <button @click="activeArchetype='{{ aid }}'" :class="pillClass(activeArchetype === '{{ aid }}')" class="border rounded-full px-3 py-1 text-sm">{{ label }}</button>
-    {% endfor %}
-    <button @click="activeArchetype='none'" :class="pillClass(activeArchetype === 'none')" class="border rounded-full px-3 py-1 text-sm">No archetype</button>
-  </div>
-  <div class="flex flex-wrap items-center gap-2 mb-6">
-    <span class="text-xs uppercase tracking-wide text-gray-500 w-14">Sort</span>
-    <template x-for="(label, key) in sorts" :key="key">
-      <button @click="sort = key" :class="pillClass(sort === key)"
-              class="border rounded-full px-3 py-1 text-sm" x-text="label"></button>
-    </template>
-  </div>
-
-  <div class="flex flex-wrap items-center gap-2 mb-6 -mt-3">
-    <span class="text-xs uppercase tracking-wide text-gray-500 w-14">Market</span>
-    <template x-for="(label, key) in marketFilters" :key="key">
-      <button @click="marketFilter = key" :class="pillClass(marketFilter === key)"
-              class="border rounded-full px-3 py-1 text-sm" x-text="label"></button>
-    </template>
-    <span class="text-xs text-gray-500" x-text="marketCount() + ' marked'"></span>
-    <button x-show="!selecting" @click="selecting = true" class="ml-auto border border-gray-700 rounded px-3 py-1 text-sm text-gray-300 hover:border-gray-500">Select jobs</button>
-    <div x-show="selecting" x-cloak class="ml-auto flex flex-wrap items-center gap-2 text-sm">
-      <span class="text-accent" x-text="selected.length + ' selected'"></span>
-      <button @click="selectVisible()" class="border border-gray-700 rounded px-3 py-1 hover:border-gray-500">Select all shown</button>
-      <button @click="bulkMarket(true)" :disabled="!selected.length" class="border border-accent text-accent rounded px-3 py-1 disabled:opacity-40">Mark as market data</button>
-      <button @click="bulkMarket(false)" :disabled="!selected.length" class="border border-gray-700 rounded px-3 py-1 disabled:opacity-40">Unmark</button>
+  <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 mb-6 space-y-3">
+    <div class="flex flex-col md:flex-row md:items-center gap-3">
+      <label class="relative flex-1 md:max-w-md">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="m11 11 3.5 3.5"/></svg>
+        <input type="text" x-model="search" placeholder="Search company or title"
+               class="w-full bg-gray-950 border border-gray-800 rounded-md pl-9 pr-3 py-2 text-sm placeholder-gray-500 focus:outline-none focus:border-accent-dim">
+      </label>
+      <div class="flex flex-wrap items-center gap-1.5 md:ml-auto">
+        <span class="text-xs uppercase tracking-wide text-gray-500 mr-1">Sort</span>
+        <template x-for="(label, key) in sorts" :key="key">
+          <button @click="sort = key" :class="pillClass(sort === key)" class="border rounded-md px-2.5 py-1 text-xs" x-text="label"></button>
+        </template>
+      </div>
+    </div>
+    <div class="flex flex-wrap items-center gap-1.5">
+      <span class="text-xs uppercase tracking-wide text-gray-500 w-24">Show</span>
+      <template x-for="(label, key) in statusFilters" :key="key">
+        <button @click="statusFilter = key" :class="pillClass(statusFilter === key)" class="border rounded-md px-2.5 py-1 text-xs" x-text="label"></button>
+      </template>
+      <button @click="showExcluded = !showExcluded" :class="pillClass(showExcluded)" class="border rounded-md px-2.5 py-1 text-xs ml-auto">
+        <span x-text="showExcluded ? 'Hide excluded' : 'Show excluded'"></span>
+      </button>
+    </div>
+    <div class="flex flex-wrap items-center gap-1.5">
+      <span class="text-xs uppercase tracking-wide text-gray-500 w-24">Lane</span>
+      <button @click="activeLane='all'" :class="pillClass(activeLane === 'all')" class="border rounded-md px-2.5 py-1 text-xs">All</button>
+      {% for key, label in lane_pills %}
+      <button @click="activeLane='{{ key }}'" :class="pillClass(activeLane === '{{ key }}')" class="border rounded-md px-2.5 py-1 text-xs">{{ label }}</button>
+      {% endfor %}
+    </div>
+    <div class="flex flex-wrap items-center gap-1.5">
+      <span class="text-xs uppercase tracking-wide text-gray-500 w-24">Archetype</span>
+      <button @click="activeArchetype='all'" :class="pillClass(activeArchetype === 'all')" class="border rounded-md px-2.5 py-1 text-xs">All</button>
+      {% for aid, label in archetype_pills %}
+      <button @click="activeArchetype='{{ aid }}'" :class="pillClass(activeArchetype === '{{ aid }}')" class="border rounded-md px-2.5 py-1 text-xs">{{ label }}</button>
+      {% endfor %}
+      <button @click="activeArchetype='none'" :class="pillClass(activeArchetype === 'none')" class="border rounded-md px-2.5 py-1 text-xs">No archetype</button>
+    </div>
+    <div class="flex flex-wrap items-center gap-1.5">
+      <span class="text-xs uppercase tracking-wide text-gray-500 w-24">Market</span>
+      <template x-for="(label, key) in marketFilters" :key="key">
+        <button @click="marketFilter = key" :class="pillClass(marketFilter === key)" class="border rounded-md px-2.5 py-1 text-xs" x-text="label"></button>
+      </template>
+      <span class="label-mono text-xs text-gray-500 ml-1" x-text="marketCount() + ' marked'"></span>
+    </div>
+    <div x-show="selecting" x-cloak class="flex flex-wrap items-center gap-2 text-sm pt-3 border-t border-gray-800">
+      <span class="text-accent label-mono text-xs" x-text="selected.length + ' selected'"></span>
+      <button @click="selectVisible()" class="border border-gray-700 rounded-md px-3 py-1 hover:border-gray-500">Select all shown</button>
+      <button @click="bulkMarket(true)" :disabled="!selected.length" class="border border-accent text-accent rounded-md px-3 py-1 disabled:opacity-40">Mark as market data</button>
+      <button @click="bulkMarket(false)" :disabled="!selected.length" class="border border-gray-700 rounded-md px-3 py-1 disabled:opacity-40">Unmark</button>
       <button @click="stopSelecting()" class="text-gray-400 hover:text-gray-200 underline">Done</button>
     </div>
   </div>
 
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  <div x-show="view === 'cards'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
     {% for row in rows %}
       {% include "partials/_card.html" %}
     {% endfor %}
   </div>
+
+  {% include "partials/_tracking_table.html" %}
+
   <p x-show="visible.length === 0" x-cloak class="text-sm text-gray-500 mt-2">No jobs match these filters.</p>
 </div>
 <script src="{{ static_url('js/board.js') }}"></script>

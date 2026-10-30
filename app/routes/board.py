@@ -1,19 +1,16 @@
-"""Board page: GET /, POST /jobs/add, POST /jobs/market-data, POST /jobs/{job_id}/bookmark"""
+"""Board page: GET /, POST /jobs/add, POST /jobs/market-data, POST /jobs/{job_id}/bookmark, POST /jobs/{job_id}/status"""
 import json
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlmodel import Session
 
-from app.constants import ARCHIVED_STATUSES, IN_PROGRESS_STATUSES, MATCH_LEVELS, STATUS_OPTIONS
+from app.constants import ARCHIVED_STATUSES, IN_PROGRESS_STATUSES, MATCH_LEVELS, STATUS_LABELS, STATUS_OPTIONS
 from app.deps import get_session
-from app.services.jobs import active_archetypes, evidenced_skill_ids, job_archetypes, list_board_rows, ranking_for
+from app.services.jobs import active_archetypes, set_tracking_status, enrich_and_match, evidenced_skill_ids, job_archetypes, list_board_rows, ranking_for
 from src.lanes.core import load_lanes
 from app.templating import templates
 from src.db import Job
-from src.archetypes.commit import assign_job
-from src.lanes.core import assess_job
-from src.enrich import enrich_job
 from src.ingest.dedupe import is_duplicate, job_id as url_job_id
 from src.ingest.manual import build_job, create_manual_job
 from src.ingest.url_fetch import fetch_and_extract
@@ -53,6 +50,15 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
                 "priority": row["priority"],
                 "lane": row["job"].lane or "none",
                 "archetype": str(assignments[row["job"].id]["primary"].archetype_id) if assignments.get(row["job"].id, {}).get("primary") else "none",
+                # table view
+                "archetype_name": row["archetype"],
+                "lane_name": row["lane_name"],
+                "eligible": row["eligible"],
+                "location": row["job"].location,
+                "deadline": row["job"].deadline,
+                "applied_at": row["tracking"].applied_at.isoformat() if row["tracking"] and row["tracking"].applied_at else None,
+                "status_since": row["tracking"].updated_at.isoformat() if row["tracking"] and row["tracking"].updated_at else None,
+                "notes": (row["tracking"].notes or "") if row["tracking"] else "",
             }
             for row in rows
         ]
@@ -64,6 +70,7 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
             "matchOrder": MATCH_LEVELS,
             "inProgress": IN_PROGRESS_STATUSES,
             "archived": ARCHIVED_STATUSES,
+            "statusLabels": STATUS_LABELS,
         }
     )
 
@@ -120,13 +127,7 @@ def add_job(
     job = create_manual_job(session, raw)
     session.commit()
 
-    try:  # role card + skills + embedding + archetype first, so screening can use the archetype
-        enrich_job(session, job)
-        session.commit()
-        assign_job(session, job.id)
-        session.commit()
-    except Exception:  # never blocks adding the job
-        session.rollback()
+    enrich_and_match(session, job)  # role card + archetype first, so screening can use the archetype; never blocks
 
     try:
         session.add(screen_job(job, archetype_text(session, job.id)))
@@ -137,12 +138,6 @@ def add_job(
         return _render_board(
             request, session, add_form={"error": f"Added the job, but screening failed: {exc}"}
         )
-
-    try:
-        assess_job(session, job)
-        session.commit()
-    except Exception:
-        session.rollback()
 
     return RedirectResponse(f"/?added={job.id}", status_code=303)
 
@@ -172,3 +167,14 @@ def set_bookmark(job_id: str, session: Session = Depends(get_session), value: st
     session.add(job)
     session.commit()
     return JSONResponse({"bookmarked": job.bookmarked})
+
+
+@router.post("/jobs/{job_id}/status")
+def set_status(job_id: str, session: Session = Depends(get_session), status: str = Form(...)):
+    """Inline status change from the board's table view."""
+    if status not in STATUS_OPTIONS or session.get(Job, job_id) is None:
+        return JSONResponse({"ok": False}, status_code=400)
+    tr = set_tracking_status(session, job_id, status)
+    session.commit()
+    return {"ok": True, "status": tr.status, "applied_at": tr.applied_at.isoformat() if tr.applied_at else None,
+            "status_since": tr.updated_at.isoformat()}

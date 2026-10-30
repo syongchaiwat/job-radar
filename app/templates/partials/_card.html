@@ -1,7 +1,7 @@
 {% set status = row.tracking.status if row.tracking else 'new' %}
 <a href="/jobs/{{ row.job.id }}" x-show="isVisible('{{ row.job.id }}')" :style="{ order: orderOf('{{ row.job.id }}') }"
    @click="cardClick($event, '{{ row.job.id }}')" :class="isSelected('{{ row.job.id }}') ? 'ring-2 ring-accent' : ''"
-   class="relative block border rounded-lg p-4 hover:border-gray-600 transition-colors bg-gray-900/40
+   class="relative block border rounded-xl p-4 hover:border-gray-600 transition-colors bg-gray-900/60
           {% if status == 'new' %}border-accent/40{% else %}border-gray-800{% endif %}
           {% if status in ('ignored', 'rejected') %}opacity-50{% endif %}">
   <div class="flex items-start justify-between mb-2 pr-8">
@@ -16,27 +16,27 @@
     </button>
     <span class="text-xs uppercase tracking-wide text-accent">{{ row.job.company }}</span>
     {% if row.screening and row.screening.match_level %}
-    <span class="text-xs border rounded-full px-2 py-0.5 {% if row.screening.match_level in ('strong','good') %}border-accent text-accent{% else %}border-gray-600 text-gray-400{% endif %}">
+    <span class="text-xs border rounded-md px-2 py-0.5 {% if row.screening.match_level in ('strong','good') %}border-accent text-accent{% else %}border-gray-600 text-gray-400{% endif %}">
       {{ row.screening.match_level | capitalize }}
     </span>
     {% endif %}
   </div>
-  <h3 class="font-semibold text-lg mb-2">{{ row.job.title }}</h3>
+  <h3 class="font-semibold text-lg leading-snug mb-2">{{ row.job.title }}</h3>
   <div class="flex flex-wrap gap-2 mb-2">
     {% if row.archetype %}
-    <span class="text-xs border border-accent/50 text-accent rounded-full px-2 py-0.5">{{ row.archetype }}</span>
+    <span class="text-xs border border-accent/50 text-accent rounded-md px-2 py-0.5">{{ row.archetype }}</span>
     {% else %}
-    <span class="text-xs border border-amber-700 text-amber-300 rounded-full px-2 py-0.5">no archetype</span>
+    <span class="text-xs border border-amber-700 text-amber-300 rounded-md px-2 py-0.5">no archetype</span>
     {% endif %}
     {% if status == 'new' %}
-    <span class="text-xs bg-accent/20 text-accent rounded-full px-2 py-0.5">Needs review</span>
+    <span class="text-xs bg-accent/20 text-accent rounded-md px-2 py-0.5">Needs review</span>
     {% else %}
-    <span class="text-xs border border-gray-700 text-gray-300 rounded-full px-2 py-0.5">{{ status | status_label }}</span>
+    <span class="text-xs border border-gray-700 text-gray-300 rounded-md px-2 py-0.5">{{ status | status_label }}</span>
     {% endif %}
-    {% if row.lane_name %}<span class="text-xs border border-gray-700 text-gray-300 rounded-full px-2 py-0.5">{{ row.lane_name }}</span>{% endif %}
-    {% if row.eligible == 'no' %}<span class="text-xs border border-amber-700 text-amber-300 rounded-full px-2 py-0.5">not eligible</span>{% endif %}
+    {% if row.lane_name %}<span class="text-xs border border-gray-700 text-gray-300 rounded-md px-2 py-0.5">{{ row.lane_name }}</span>{% endif %}
+    {% if row.eligible == 'no' %}<span class="text-xs border border-amber-700 text-amber-300 rounded-md px-2 py-0.5">not eligible</span>{% endif %}
     {% if row.own_cv %}
-    <span class="text-xs border border-gray-700 text-gray-300 rounded-full px-2 py-0.5">CV · edited for this job</span>
+    <span class="text-xs border border-gray-700 text-gray-300 rounded-md px-2 py-0.5">CV · edited for this job</span>
     {% endif %}
   </div>
   {% if row.screening and row.screening.blurb %}
@@ -49,7 +49,7 @@
     <span class="flex items-center gap-2">
       <button type="button" @click.prevent.stop="toggleMarket('{{ row.job.id }}')"
               :class="marketOn('{{ row.job.id }}') ? 'border-accent text-accent bg-accent/10' : 'border-gray-700 text-gray-500 hover:text-gray-300'"
-              class="border rounded-full px-2 py-0.5" title="Market data: this posting shapes archetypes and market stats">
+              class="border rounded-md px-2 py-0.5" title="Market data: this posting shapes archetypes and market stats">
         <span x-text="marketOn('{{ row.job.id }}') ? '◆ market data' : '◇ market data'"></span>
       </button>
       <span>{{ row.job.source }}</span>

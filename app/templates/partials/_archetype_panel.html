@@ -1,3 +1,12 @@
+{% if not role_card %}
+<div class="border border-amber-700 rounded-lg p-4 mb-3 space-y-2">
+  <p class="text-sm text-amber-300">No role card yet, so no archetype or lane.</p>
+  <p class="text-xs text-gray-400">{% if request.query_params.get('enrich_error') %}Last try failed: {{ request.query_params.get('enrich_error') }}{% else %}Usually the AI call failed when the job was added (e.g. an API key or credit problem).{% endif %}</p>
+  <form method="post" action="/jobs/{{ job.id }}/enrich" x-data="{ w: false }" @submit="w = true">
+    <button :disabled="w" class="border border-accent text-accent rounded px-3 py-1 text-sm hover:bg-accent/10 disabled:opacity-50"><span x-show="!w">Retry</span><span x-show="w" x-cloak class="animate-pulse">Building role card… (~20s)</span></button>
+  </form>
+</div>
+{% endif %}
 {% if archetype_set %}
 <form method="post" action="/jobs/{{ job.id }}/archetype" x-data="{ working: false }" @submit="working = true"
       class="border {% if archetype_primary %}border-accent/40{% else %}border-amber-800{% endif %} rounded-lg p-4 space-y-2">

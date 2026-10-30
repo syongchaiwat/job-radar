@@ -2,6 +2,7 @@
 POST /jobs/{job_id}/description, GET /jobs/{job_id}/breakdown, POST /jobs/{job_id}/market-data,
 POST /jobs/{job_id}/archetype, POST /jobs/{job_id}/lane, POST /jobs/{job_id}/deadline, cover letters"""
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
@@ -9,7 +10,7 @@ from sqlmodel import Session
 
 from app.constants import STATUS_OPTIONS
 from app.deps import get_session
-from app.services.jobs import get_job_bundle
+from app.services.jobs import enrich_and_match, get_job_bundle, set_tracking_status
 from app.templating import templates
 from src.enrich.breakdown import compute_breakdown
 from src.screening.run import archetype_text, screen_job
@@ -63,10 +64,8 @@ def save_tracking(
     bundle = get_job_bundle(session, job_id)
     if bundle is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    tr = bundle["tracking"]
-    tr.status = status
+    tr = set_tracking_status(session, job_id, status) if status != bundle["tracking"].status else bundle["tracking"]
     tr.notes = notes
-    tr.updated_at = datetime.now(timezone.utc)
     session.add(tr)
     session.commit()
     session.refresh(tr)
@@ -93,10 +92,22 @@ def replace_description(job_id: str, session: Session = Depends(get_session), de
     job.description = description
     job.description_breakdown = None  # cached breakdown was computed from the old text
     job.description_breakdown_computed_at = None
+    session.commit()
+    error = enrich_and_match(session, job, force=True)  # the role card must follow the new text
     session.add(screen_job(job, archetype_text(session, job.id)))
     session.add(job)
     session.commit()
-    return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+    return RedirectResponse(f"/jobs/{job_id}" + (f"?enrich_error={quote(error)}" if error else ""), status_code=303)
+
+
+@router.post("/jobs/{job_id}/enrich")
+def retry_enrich(job_id: str, session: Session = Depends(get_session)):
+    """Retry the role card, archetype and lane (e.g. after a failed LLM call when the job was added)."""
+    bundle = get_job_bundle(session, job_id)
+    if bundle is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    error = enrich_and_match(session, bundle["job"])
+    return RedirectResponse(f"/jobs/{job_id}" + (f"?enrich_error={quote(error)}" if error else ""), status_code=303)
 
 
 @router.get("/jobs/{job_id}/breakdown")
