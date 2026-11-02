@@ -4,6 +4,8 @@
 const SORTS = {
   priority: "Priority",
   review: "Needs review first",
+  next: "Next action",
+  activity: "Last activity",
   newest: "Newest added",
   match: "Best match",
   archetype: "Archetype",
@@ -20,10 +22,17 @@ const MARKET_FILTERS = {
 const STATUS_FILTERS = {
   active: "Active",
   review: "Needs review",
-  progress: "In progress",
-  archived: "Archived",
+  shortlist: "Shortlist",
+  applied: "Applied",
+  upcoming: "Upcoming",
+  skipped: "Skipped",
   all: "All",
 };
+
+const APPLIED_SCOPES = { all: "All", open: "Open", closed: "Closed" };
+
+// Next-action urgency for the "Next action" sort.
+const NEXT_ORDER = ["debrief", "due", "upcoming", "follow_up"];
 
 function board() {
   return {
@@ -37,6 +46,9 @@ function board() {
     statusFilter: "active",
     sorts: SORTS,
     statusFilters: STATUS_FILTERS,
+    appliedScope: "all",
+    appliedScopes: APPLIED_SCOPES,
+    expanded: null,
     marketFilter: "all",
     marketFilters: MARKET_FILTERS,
     selecting: false,
@@ -48,15 +60,27 @@ function board() {
       this.jobs = el ? JSON.parse(el.textContent) : [];
       const cfg = document.getElementById("board-config");
       this.config = cfg ? JSON.parse(cfg.textContent) : {};
+      window.addEventListener("application-updated", (e) => {
+        const j = this.job(e.detail.jobId);
+        if (!j.job_id) return;
+        Object.assign(j, e.detail.application, { app: e.detail.application, status: e.detail.application.status });
+      });
     },
     matchesStatus(j) {
+      const a = j.app;
       switch (this.statusFilter) {
+        case "active": return j.status !== "skipped" && !a.closed;
         case "review": return j.status === "new";
-        case "progress": return this.config.inProgress.includes(j.status);
-        case "archived": return this.config.archived.includes(j.status);
-        case "active": return !this.config.archived.includes(j.status);
+        case "shortlist": return j.status === "shortlist";
+        case "applied":
+          return a.applied && (this.appliedScope === "all" || (this.appliedScope === "closed") === a.closed);
+        case "upcoming": return !!(a.next && a.next.kind === "upcoming");
+        case "skipped": return j.status === "skipped";
         default: return true;
       }
+    },
+    countWhere(fn) {
+      return this.jobs.filter(fn).length;
     },
     get visible() {
       const q = this.search.trim().toLowerCase();
@@ -88,6 +112,12 @@ function board() {
         case "archetype": return by((j) => this.rankIn(this.config.archetypeOrder, j.archetype));
         case "status": return by((j) => this.rankIn(this.config.statusOrder, j.status));
         case "cv": return by((j) => (j.own_cv ? 0 : 1));
+        case "activity": return (b.app.last_activity || "").localeCompare(a.app.last_activity || "") || newest;
+        case "next": {
+          const rank = (j) => (j.app.next ? NEXT_ORDER.indexOf(j.app.next.kind) : NEXT_ORDER.length + (j.app.applied && !j.app.closed ? 0 : 1));
+          const day = (j) => (j.app.next && j.app.next.date) || "9999";
+          return rank(a) - rank(b) || day(a).localeCompare(day(b)) || (b.app.last_activity || "").localeCompare(a.app.last_activity || "");
+        }
         default: return newest;
       }
     },
@@ -108,6 +138,8 @@ function board() {
     },
     // --- view toggle: cards (triage) or tracking table (applications) ---
     setView(v) {
+      if (v === "table" && ["active", "review", "shortlist"].includes(this.statusFilter)) this.statusFilter = "applied";
+      if (v === "table" && ["review", "priority"].includes(this.sort)) this.sort = "next";
       this.view = v;
       try { localStorage.setItem("board.view", v); } catch (e) {}
     },
@@ -121,55 +153,31 @@ function board() {
     cap(s) {
       return s ? s[0].toUpperCase() + s.slice(1) : "";
     },
-    // Timestamps come from SQLite without a zone; they are UTC.
-    toDate(iso) {
-      return new Date(/[zZ]|[+-]\d\d:\d\d$/.test(iso) ? iso : iso + "Z");
+    logStage(j, extra = {}) {
+      this.$dispatch("log-stage", { jobId: j.job_id, company: j.company, title: j.title, app: j.app, ...extra });
     },
-    fmtDate(iso) {
-      if (!iso) return "";
-      const d = this.toDate(iso);
-      const opts = { day: "numeric", month: "short" };
-      if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
-      return d.toLocaleDateString("en-GB", opts);
+    toggleRow(id) {
+      this.expanded = this.expanded === id ? null : id;
     },
-    daysAgo(iso) {
-      return Math.max(0, Math.floor((Date.now() - this.toDate(iso)) / 86400000));
+    nextText(n) {
+      if (!n) return "";
+      if (n.kind === "upcoming") return `${n.label} · ${weekday(n.date)} ${fmtDay(n.date)}${n.time ? " " + n.time : ""}`;
+      if (n.kind === "due") return `Assessment due ${relDay(n.date)}`;
+      if (n.kind === "follow_up") return `Follow up? ${n.days} days quiet`;
+      return n.label;
     },
-    elapsedPct(iso) {
-      return Math.min(100, Math.round((this.daysAgo(iso) / 30) * 100));
-    },
-    stageClass(status) {
-      return {
-        new: "bg-accent-dim/15 border-accent-dim/40 text-accent",
-        shortlist: "bg-accent-dim/15 border-accent-dim/40 text-accent",
-        applied: "bg-green-500/15 border-green-500/40 text-green-300",
-        "in-process": "bg-amber-500/15 border-amber-500/40 text-amber-300",
-        offer: "bg-amber-500/25 border-amber-400/60 text-amber-200",
-        rejected: "bg-red-500/10 border-red-500/40 text-red-300",
-        ignored: "bg-gray-800 border-gray-700 text-gray-400",
-      }[status] || "bg-gray-800 border-gray-700 text-gray-300";
-    },
-    barClass(status) {
-      return { applied: "bg-green-400", "in-process": "bg-amber-400", offer: "bg-amber-300", rejected: "bg-red-400" }[status] || "bg-accent-dim";
-    },
-    async setStatus(j, status) {
-      const prev = j.status;
-      j.status = status;
-      const res = await fetch(`/jobs/${j.job_id}/status`, { method: "POST", body: new URLSearchParams({ status }) });
-      if (!res.ok) { j.status = prev; return; }
-      const data = await res.json();
-      j.applied_at = data.applied_at;
-      j.status_since = data.status_since;
+    nextClass(n) {
+      return { upcoming: "text-accent", due: "text-amber-300", debrief: "text-amber-200", follow_up: "text-amber-300" }[n && n.kind] || "text-gray-500";
     },
     subtitle() {
       const total = this.jobs.length;
       const shown = this.visible.length;
-      const toReview = this.jobs.filter((j) => j.status === "new").length;
+      const toReview = this.countWhere((j) => j.status === "new");
       return `${shown} shown of ${total}` + (toReview ? ` · ${toReview} need review` : "");
     },
     // --- market data (pipeline revamp Phase 1) ---
     job(jobId) {
-      return this.jobs.find((j) => j.job_id === jobId) || {};
+      return this.jobs.find((j) => j.job_id === jobId) || { app: {} };
     },
     marketOn(jobId) {
       return !!this.job(jobId).market_data;

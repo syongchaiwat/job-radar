@@ -20,7 +20,7 @@
   <span class="text-xs text-gray-500 break-all">{{ job.url }}</span>
 </p>
 
-{% include "partials/_review_bar.html" %}
+{% if not application.applied %}{% include "partials/_review_bar.html" %}{% endif %}
 {% include "partials/_role_card.html" %}
 
 
@@ -33,9 +33,9 @@
     {% endif %}
   </div>
   <div class="space-y-4">
+    {% include "partials/_application_panel.html" %}
     {% include "partials/_lane_panel.html" %}
     {% include "partials/_archetype_panel.html" %}
-    {% include "partials/_tracking_panel.html" %}
   </div>
 </div>
 
@@ -68,4 +68,5 @@
     </form>
   </details>
 </div>
+{% include "partials/_stage_modal.html" %}
 {% endblock %}

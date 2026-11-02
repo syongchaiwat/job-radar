@@ -1,20 +1,11 @@
 """Shared display constants for the dashboard app."""
 
-STATUS_OPTIONS = ["new", "shortlist", "applied", "in-process", "offer", "rejected", "ignored"]
+from src.tracking.core import STAGES, STATUS_LABELS  # noqa: F401  (status keys and labels live with the stage rules)
 
-STATUS_LABELS = {
-    "new": "New",
-    "shortlist": "Shortlist",
-    "applied": "Applied",
-    "in-process": "In process",
-    "offer": "Offer",
-    "rejected": "Rejected",
-    "ignored": "Archived",  # D2: "ignored" is reused as the review queue's Archive action
-}
-
-# Board status filter groups. "Needs review" = never looked at (status still "new").
-IN_PROGRESS_STATUSES = ["shortlist", "applied", "in-process", "offer"]
-ARCHIVED_STATUSES = ["ignored", "rejected"]
+STATUS_OPTIONS = ["new", *STAGES]
+TRIAGE_STATUSES = ["new", *(k for k, s in STAGES.items() if s.group == "triage")]
+PROCESS_STATUSES = [k for k, s in STAGES.items() if s.group == "process"]
+OUTCOME_STATUSES = [k for k, s in STAGES.items() if s.group == "outcome"]
 
 MATCH_LEVELS = ["strong", "good", "moderate", "stretch"]
 

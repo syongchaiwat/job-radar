@@ -1,0 +1,126 @@
+{# Job page: the application's stage log (timeline), what I sent, and channel/contact details. #}
+{% set a = application %}
+<div id="application" class="border {% if a.applied and not a.closed %}border-green-500/30{% else %}border-gray-800{% endif %} rounded-xl p-4 space-y-4"
+     x-data='{ app: {{ a | tojson }}, job: { jobId: "{{ job.id }}", company: {{ job.company | tojson }}, title: {{ job.title | tojson }} } }'
+     @application-updated.window="if ($event.detail.jobId === job.jobId) location.reload()">
+  <div class="flex items-start gap-3">
+    <div class="min-w-0">
+      <p class="text-xs uppercase tracking-wide text-gray-500">Application</p>
+      <p class="mt-1 flex flex-wrap items-center gap-2">
+        <span class="label-mono text-xs border rounded-md px-2 py-1" :class="stageClass(app.status)" x-text="app.stage_label"></span>
+        <span x-show="app.stage_date" class="label-mono text-xs text-gray-400" x-text="(app.stage_estimated ? '≈ ' : '') + fmtDay(app.stage_date)"></span>
+      </p>
+    </div>
+    <button type="button" @click="$dispatch('log-stage', { ...job, app })"
+            class="ml-auto shrink-0 bg-accent-soft text-accent-ink font-medium rounded-md px-3 py-1.5 text-sm hover:bg-accent">Log stage</button>
+  </div>
+
+  {% if a.applied %}
+  {% set last_passed = (a.stepper | selectattr('passed') | list | length) - 1 %}
+  <div class="flex items-center gap-1" aria-label="Progress">
+    {% for s in a.stepper %}
+    {% set stopped = a.closed and a.status != 'accepted' and loop.index0 == last_passed %}
+    <span class="flex items-center gap-1 {% if not loop.last %}flex-1{% endif %}" title="{{ s.label }}{% if s.date %} · {{ s.date }}{% elif s.passed %} · skipped{% endif %}">
+      <span class="w-2.5 h-2.5 rounded-full {% if stopped %}bg-red-400{% elif s.done %}bg-green-400{% elif s.passed %}border-2 border-green-500/60{% else %}bg-gray-700{% endif %}"></span>
+      {% if not loop.last %}<span class="h-px flex-1 {% if a.stepper[loop.index].passed %}bg-green-500/60{% else %}bg-gray-700{% endif %}"></span>{% endif %}
+    </span>
+    {% endfor %}
+  </div>
+  <div class="flex justify-between label-mono text-[10px] uppercase text-gray-500 -mt-2">
+    {% for s in a.stepper %}<span>{{ s.label }}</span>{% endfor %}
+  </div>
+  {% endif %}
+
+  {% if a.next %}
+  <div class="rounded-md px-3 py-2 text-sm flex items-center gap-2
+              {% if a.next.kind == 'upcoming' %}bg-accent-dim/15 text-accent{% elif a.next.kind == 'debrief' %}bg-amber-500/10 text-amber-200{% else %}bg-amber-500/10 text-amber-300{% endif %}">
+    {% if a.next.kind == 'upcoming' %}
+      <span>Upcoming: {{ a.next.label }} · <span x-text="weekday('{{ a.next.date }}') + ' ' + fmtDay('{{ a.next.date }}')"></span>{% if a.next.time %} {{ a.next.time }}{% endif %} (<span x-text="relDay('{{ a.next.date }}')"></span>)</span>
+    {% elif a.next.kind == 'debrief' %}
+      <span>{{ a.next.label }}</span>
+      <button type="button" class="ml-auto underline" @click="$dispatch('log-stage', { ...job, app, event: app.events.find(e => e.id === {{ a.next.event_id }}) })">Add debrief</button>
+    {% elif a.next.kind == 'due' %}
+      <span>{{ a.next.label }} <span x-text="relDay('{{ a.next.date }}')"></span> ({{ a.next.date }})</span>
+    {% else %}
+      <span>No news for {{ a.next.days }} days since the last entry. Follow up?</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if a.events %}
+  <ol class="relative border-l border-gray-800 ml-1.5 space-y-3">
+    <template x-for="e in [...app.events].reverse()" :key="e.id">
+      <li class="pl-4 relative">
+        <span class="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-gray-950"
+              :class="e.upcoming ? 'bg-accent' : (e.group === 'outcome' ? (e.stage === 'accepted' ? 'bg-green-400' : 'bg-red-400') : (e.group === 'triage' ? 'bg-gray-500' : 'bg-green-400'))"></span>
+        <div class="flex items-start gap-2">
+          <div class="min-w-0 flex-1">
+            <p class="text-sm">
+              <span class="font-medium" x-text="e.label"></span>
+              <span x-show="e.detail.kind" class="text-gray-400" x-text="' · ' + e.detail.kind"></span>
+              <span x-show="e.detail.rating" class="text-amber-300 ml-1" x-text="'★'.repeat(e.detail.rating || 0)"></span>
+            </p>
+            <p class="label-mono text-[11px] text-gray-500">
+              <span x-show="e.estimated" title="Estimated during migration: edit to set the real date">≈ </span><span x-text="weekday(e.date) + ' ' + fmtDay(e.date, true)"></span><span x-show="e.time" x-text="' · ' + e.time"></span>
+              <span x-show="e.upcoming" class="text-accent" x-text="' · ' + relDay(e.date)"></span>
+              <span x-show="e.detail.format" x-text="' · ' + e.detail.format"></span>
+              <span x-show="e.detail.platform" x-text="' · ' + e.detail.platform"></span>
+              <span x-show="e.detail.due" x-text="' · due ' + fmtDay(e.detail.due)"></span>
+              <span x-show="e.detail.submitted" x-text="' · submitted ' + fmtDay(e.detail.submitted)"></span>
+            </p>
+            <p x-show="e.detail.people" class="text-xs text-gray-400 mt-0.5" x-text="'With ' + e.detail.people"></p>
+            <p x-show="e.note" class="text-xs text-gray-400 mt-1 whitespace-pre-line" x-text="e.note"></p>
+            <details x-show="e.debrief || e.questions" class="mt-1">
+              <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300">Debrief</summary>
+              <div class="mt-1 text-xs text-gray-300 space-y-1">
+                <ul x-show="e.questions" class="list-disc pl-4"><template x-for="q in e.questions.split('\n').filter(Boolean)"><li x-text="q"></li></template></ul>
+                <p x-show="e.debrief" class="whitespace-pre-line text-gray-400" x-text="e.debrief"></p>
+              </div>
+            </details>
+          </div>
+          <a x-show="e.upcoming && ['screening','interview','assessment'].includes(e.stage)" :href="'/jobs/' + job.jobId + '/stages/' + e.id + '.ics'"
+             class="label-mono text-[11px] text-gray-500 hover:text-accent" title="Add to calendar">.ics</a>
+          <button type="button" @click="$dispatch('log-stage', { ...job, app, event: e })" class="text-xs text-gray-500 hover:text-gray-200">Edit</button>
+        </div>
+      </li>
+    </template>
+  </ol>
+  {% else %}
+  <p class="text-sm text-gray-500">Nothing logged yet. Log Applied when you send the application.</p>
+  {% endif %}
+
+  {% if a.applied %}
+  <div class="border-t border-gray-800 pt-3 text-sm">
+    <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Sent</p>
+    <div class="flex flex-wrap gap-3">
+      {% if a.sent_cv %}<a href="/jobs/{{ job.id }}/sent/cv.pdf" class="text-accent hover:underline">CV as sent{% if a.sent_cv_edited %} (edited for this job){% else %} (library){% endif %} ↓</a>
+      {% else %}<span class="text-gray-500 text-xs">No CV recorded for this application.</span>{% endif %}
+      {% if a.sent_letter %}<a href="/jobs/{{ job.id }}/sent/letter.pdf" class="text-accent hover:underline">Cover letter as sent ↓</a>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <details class="border-t border-gray-800 pt-3" {% if request.query_params.get('saved') == 'application' %}open{% endif %}>
+    <summary class="text-xs uppercase tracking-wide text-gray-500 cursor-pointer hover:text-gray-300">Channel, contact &amp; notes
+      {% if a.channel or a.contact %}<span class="normal-case tracking-normal font-sans text-gray-400"> · {{ [a.channel, a.contact] | select | join(' · ') }}</span>{% endif %}</summary>
+    <form method="post" action="/jobs/{{ job.id }}/application" class="mt-3 space-y-2 text-sm">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <input name="channel" value="{{ a.channel }}" placeholder="Applied via (Workday, email, referral…)" class="bg-gray-950 border border-gray-700 rounded-md px-3 py-1.5">
+        <input name="application_ref" value="{{ a.application_ref }}" placeholder="Application ID" class="bg-gray-950 border border-gray-700 rounded-md px-3 py-1.5">
+      </div>
+      <input name="contact" value="{{ a.contact }}" placeholder="Recruiter / contact (name, email)" class="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-1.5">
+      {% if same_company_jobs or related_job %}
+      <select name="related_job_id" class="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-1.5">
+        <option value="">Not linked to another application</option>
+        {% for j in same_company_jobs %}<option value="{{ j.id }}" {% if tracking.related_job_id == j.id %}selected{% endif %}>Linked: {{ j.title }}</option>{% endfor %}
+      </select>
+      {% endif %}
+      <textarea name="notes" rows="3" placeholder="Notes about this job" class="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-1.5">{{ a.notes }}</textarea>
+      <div class="flex items-center gap-3">
+        <button class="border border-gray-700 rounded-md px-4 py-1.5 hover:border-gray-500">Save</button>
+        {% if request.query_params.get('saved') == 'application' %}<span class="text-xs text-green-400">Saved.</span>{% endif %}
+        {% if related_job %}<a href="/jobs/{{ related_job.id }}" class="text-xs text-accent hover:underline ml-auto">Open linked: {{ related_job.title }} →</a>{% endif %}
+      </div>
+    </form>
+  </details>
+</div>

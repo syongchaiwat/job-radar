@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi.templating import Jinja2Templates
 
 from app.constants import STATUS_LABELS
+from src.tracking.core import FORMATS, INTERVIEW_KINDS
 from app.services import render as render_service
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -26,3 +27,4 @@ def static_url(path: str) -> str:
 
 
 templates.env.globals["static_url"] = static_url
+templates.env.globals.update(status_labels=STATUS_LABELS, interview_kinds=INTERVIEW_KINDS, formats=FORMATS)

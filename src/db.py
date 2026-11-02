@@ -68,14 +68,38 @@ class Screening(SQLModel, table=True):
 
 
 class Tracking(SQLModel, table=True):
-    """Application status, one row per job."""
+    """Application state, one row per job. `status` is a cache of the stage log
+    (StageEvent), kept in sync by src/tracking/core.py: never set it directly."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
     job_id: str = Field(foreign_key="job.id", unique=True)
-    status: str = "new"  # new | shortlist | applied | in-process | offer | rejected | ignored
-    applied_at: Optional[datetime] = None
+    status: str = "new"  # a stage key from src/tracking/core.py STAGES, or "new"
+    applied_at: Optional[datetime] = None  # date of the Applied event
     notes: Optional[str] = None
     updated_at: datetime = Field(default_factory=_utcnow)
+    channel: Optional[str] = None  # how I applied: portal name, email, referral
+    contact: Optional[str] = None  # recruiter / contact person
+    application_ref: Optional[str] = None  # the portal's application ID
+    sent_cv_ref: Optional[str] = None  # CV in use when I applied: "library:<CVVersion id>" | "job:<JobCV id>"
+    sent_letter_id: Optional[int] = None  # cover letter version in use when I applied
+    related_job_id: Optional[str] = None  # earlier application to the same company / a role a recruiter moved me to
+
+
+class StageEvent(SQLModel, table=True):
+    """One step of an application: something that happened (or is scheduled, when
+    the date is in the future). The job's status is derived from these."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    job_id: str = Field(foreign_key="job.id", index=True)
+    stage: str  # key from src/tracking/core.py STAGES
+    date: str  # ISO date, entered by me (Zurich local date)
+    time: Optional[str] = None  # "HH:MM", for calls and interviews
+    detail: str = "{}"  # JSON: round, kind, format, people, platform, due, submitted, rating
+    note: Optional[str] = None  # short note / prep notes
+    debrief: Optional[str] = None  # how it went, follow-ups
+    questions: Optional[str] = None  # questions asked, one per line
+    estimated: bool = False  # date guessed during migration; shown as "≈" until I correct it
+    created_at: datetime = Field(default_factory=_utcnow)
 
 
 class JobCV(SQLModel, table=True):
@@ -315,6 +339,14 @@ _ADDED_COLUMNS = {
         "lane": "VARCHAR",
         "lane_source": "VARCHAR",
         "deadline": "VARCHAR",
+    },
+    "tracking": {
+        "channel": "VARCHAR",
+        "contact": "VARCHAR",
+        "application_ref": "VARCHAR",
+        "sent_cv_ref": "VARCHAR",
+        "sent_letter_id": "INTEGER",
+        "related_job_id": "VARCHAR",
     },
     "coverletter": {
         "header": "VARCHAR",

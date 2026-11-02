@@ -1,0 +1,110 @@
+{# Shared Log stage form (board + job page). Opened with $dispatch('log-stage', {...}); see static/js/stages.js. #}
+<div x-data='stageModal({{ status_labels | tojson }})' @log-stage.window="show($event.detail)" @keydown.escape.window="open = false">
+  <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-4 bg-black/60 overflow-y-auto" @click.self="open = false">
+    <form @submit.prevent="submit()" class="w-full max-w-lg bg-gray-900 border border-gray-700 rounded-xl shadow-2xl my-8">
+      <div class="px-5 pt-5 pb-3 border-b border-gray-800">
+        <p class="label-mono text-[11px] uppercase text-gray-500 truncate" x-text="company + (title ? ' • ' + title : '')"></p>
+        <h2 class="text-xl font-semibold" x-text="heading()"></h2>
+      </div>
+      <div class="px-5 py-4 space-y-4 text-sm">
+        <label x-show="!editing" class="block">
+          <span class="text-xs uppercase tracking-wide text-gray-500">Stage</span>
+          <select x-ref="first" x-model="f.stage" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2">
+            <optgroup label="Suggested">
+              <template x-for="s in suggested()" :key="'s-' + s"><option :value="s" x-text="labels[s]" :selected="s === f.stage"></option></template>
+            </optgroup>
+            <template x-for="g in groups" :key="g[0]">
+              <optgroup :label="g[0]">
+                <template x-for="s in g[1]" :key="s"><option :value="s" x-text="labels[s]"></option></template>
+              </optgroup>
+            </template>
+          </select>
+        </label>
+
+        <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
+          <label class="block">
+            <span class="text-xs uppercase tracking-wide text-gray-500">Date</span>
+            <input type="date" x-model="f.date" required class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2 [color-scheme:dark]">
+            <span class="flex gap-2 mt-1.5">
+              <button type="button" @click="setDate(0)" class="label-mono text-[11px] border border-gray-700 rounded px-2 py-0.5 hover:border-gray-500">Today</button>
+              <button type="button" @click="setDate(-1)" class="label-mono text-[11px] border border-gray-700 rounded px-2 py-0.5 hover:border-gray-500">Yesterday</button>
+              <span x-show="!isPast()" class="label-mono text-[11px] text-accent self-center">scheduled</span>
+            </span>
+          </label>
+          <label x-show="hasTime()" class="block">
+            <span class="text-xs uppercase tracking-wide text-gray-500">Time</span>
+            <input type="time" x-model="f.time" class="mt-1 w-full sm:w-32 bg-gray-950 border border-gray-700 rounded-md px-3 py-2 [color-scheme:dark]">
+          </label>
+        </div>
+
+        <label x-show="needsApplied()" class="block border border-amber-700/50 bg-amber-500/5 rounded-md p-3">
+          <span class="text-xs uppercase tracking-wide text-amber-300">When did you apply?</span>
+          <input type="date" x-model="f.applied_on" :placeholder="f.date" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2 [color-scheme:dark]">
+          <span class="block text-xs text-gray-500 mt-1">No Applied entry yet: one is added with this date (leave empty for the same date as above).</span>
+        </label>
+
+        <template x-if="stage === 'interview'">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label class="block sm:col-span-2"><span class="text-xs uppercase tracking-wide text-gray-500">Type</span>
+              <select x-model="f.kind" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2">
+                <option value="">–</option>
+                {% for k in interview_kinds %}<option>{{ k }}</option>{% endfor %}
+              </select></label>
+            <label x-show="editing" class="block"><span class="text-xs uppercase tracking-wide text-gray-500">Round</span>
+              <input type="number" min="1" x-model="f.round" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2"></label>
+          </div>
+        </template>
+        <template x-if="stage === 'interview' || stage === 'screening'">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label class="block"><span class="text-xs uppercase tracking-wide text-gray-500">Format</span>
+              <select x-model="f.format" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2">
+                <option value="">–</option>
+                {% for k in formats %}<option>{{ k }}</option>{% endfor %}
+              </select></label>
+            <label class="block sm:col-span-2"><span class="text-xs uppercase tracking-wide text-gray-500">With</span>
+              <input type="text" x-model="f.people" placeholder="Names and roles" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2"></label>
+          </div>
+        </template>
+        <template x-if="stage === 'assessment'">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label class="block"><span class="text-xs uppercase tracking-wide text-gray-500">Platform</span>
+              <input type="text" x-model="f.platform" placeholder="HackerRank, take-home…" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2"></label>
+            <label class="block"><span class="text-xs uppercase tracking-wide text-gray-500">Due</span>
+              <input type="date" x-model="f.due" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2 [color-scheme:dark]"></label>
+            <label class="block"><span class="text-xs uppercase tracking-wide text-gray-500">Submitted</span>
+              <input type="date" x-model="f.submitted" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2 [color-scheme:dark]"></label>
+          </div>
+        </template>
+
+        <label class="block">
+          <span class="text-xs uppercase tracking-wide text-gray-500" x-text="hasTime() ? 'Prep notes' : 'Note'"></span>
+          <textarea x-model="f.note" rows="2" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2"></textarea>
+        </label>
+
+        <template x-if="editing && hasTime() && isPast()">
+          <div class="space-y-3 border-t border-gray-800 pt-4">
+            <p class="text-xs uppercase tracking-wide text-gray-400">Debrief</p>
+            <div class="flex items-center gap-1">
+              <span class="text-xs text-gray-500 mr-2">How it went</span>
+              <template x-for="n in [1,2,3,4,5]" :key="n">
+                <button type="button" @click="f.rating = (f.rating === String(n) ? '' : String(n))"
+                        :class="Number(f.rating) >= n ? 'text-amber-300' : 'text-gray-600 hover:text-gray-400'" class="text-lg leading-none">★</button>
+              </template>
+            </div>
+            <label class="block"><span class="text-xs text-gray-500">Questions asked (one per line)</span>
+              <textarea x-model="f.questions" rows="4" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2"></textarea></label>
+            <label class="block"><span class="text-xs text-gray-500">How it went, follow-ups</span>
+              <textarea x-model="f.debrief" rows="3" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2"></textarea></label>
+          </div>
+        </template>
+
+        <p x-show="error" x-text="error" class="text-sm text-red-300 border border-red-500/40 bg-red-500/10 rounded-md px-3 py-2"></p>
+      </div>
+      <div class="px-5 py-4 border-t border-gray-800 flex items-center gap-2">
+        <button type="button" x-show="editing" @click="remove()" class="text-xs text-red-300 hover:underline">Delete entry</button>
+        <button type="button" @click="open = false" class="ml-auto border border-gray-700 rounded-md px-4 py-1.5 hover:border-gray-500">Cancel</button>
+        <button type="submit" :disabled="saving" class="bg-accent-soft text-accent-ink font-medium rounded-md px-4 py-1.5 hover:bg-accent disabled:opacity-50" x-text="saving ? 'Saving…' : 'Save'"></button>
+      </div>
+    </form>
+  </div>
+</div>

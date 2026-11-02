@@ -1,13 +1,14 @@
-"""Board page: GET /, POST /jobs/add, POST /jobs/market-data, POST /jobs/{job_id}/bookmark, POST /jobs/{job_id}/status"""
+"""Board page: GET /, POST /jobs/add, POST /jobs/market-data, POST /jobs/{job_id}/bookmark"""
 import json
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlmodel import Session
 
-from app.constants import ARCHIVED_STATUSES, IN_PROGRESS_STATUSES, MATCH_LEVELS, STATUS_LABELS, STATUS_OPTIONS
+from app.constants import MATCH_LEVELS, OUTCOME_STATUSES, PROCESS_STATUSES, STATUS_LABELS, STATUS_OPTIONS, TRIAGE_STATUSES
+from app.services.tracking import tracking_fields
 from app.deps import get_session
-from app.services.jobs import active_archetypes, set_tracking_status, enrich_and_match, evidenced_skill_ids, job_archetypes, list_board_rows, ranking_for
+from app.services.jobs import active_archetypes, enrich_and_match, evidenced_skill_ids, job_archetypes, list_board_rows, ranking_for
 from src.lanes.core import load_lanes
 from app.templating import templates
 from src.db import Job
@@ -50,15 +51,15 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
                 "priority": row["priority"],
                 "lane": row["job"].lane or "none",
                 "archetype": str(assignments[row["job"].id]["primary"].archetype_id) if assignments.get(row["job"].id, {}).get("primary") else "none",
-                # table view
+                # tracking table
                 "archetype_name": row["archetype"],
                 "lane_name": row["lane_name"],
                 "eligible": row["eligible"],
                 "location": row["job"].location,
                 "deadline": row["job"].deadline,
-                "applied_at": row["tracking"].applied_at.isoformat() if row["tracking"] and row["tracking"].applied_at else None,
-                "status_since": row["tracking"].updated_at.isoformat() if row["tracking"] and row["tracking"].updated_at else None,
-                "notes": (row["tracking"].notes or "") if row["tracking"] else "",
+                "source": row["job"].source,
+                "app": row["app"],
+                **(tracking_fields(row["tracking"]) if row["tracking"] else {}),
             }
             for row in rows
         ]
@@ -68,8 +69,9 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
             "archetypeOrder": [str(a.id) for a in archetypes],
             "statusOrder": STATUS_OPTIONS,
             "matchOrder": MATCH_LEVELS,
-            "inProgress": IN_PROGRESS_STATUSES,
-            "archived": ARCHIVED_STATUSES,
+            "triage": TRIAGE_STATUSES,
+            "process": PROCESS_STATUSES,
+            "outcome": OUTCOME_STATUSES,
             "statusLabels": STATUS_LABELS,
         }
     )
@@ -167,14 +169,3 @@ def set_bookmark(job_id: str, session: Session = Depends(get_session), value: st
     session.add(job)
     session.commit()
     return JSONResponse({"bookmarked": job.bookmarked})
-
-
-@router.post("/jobs/{job_id}/status")
-def set_status(job_id: str, session: Session = Depends(get_session), status: str = Form(...)):
-    """Inline status change from the board's table view."""
-    if status not in STATUS_OPTIONS or session.get(Job, job_id) is None:
-        return JSONResponse({"ok": False}, status_code=400)
-    tr = set_tracking_status(session, job_id, status)
-    session.commit()
-    return {"ok": True, "status": tr.status, "applied_at": tr.applied_at.isoformat() if tr.applied_at else None,
-            "status_since": tr.updated_at.isoformat()}

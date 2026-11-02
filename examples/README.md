@@ -9,5 +9,5 @@ Everything in this folder describes **Alex Muster**, a made-up candidate, so a f
   profile/            filters.md, constraints.md, lanes.md, motivation.md, projects.md, coursework.md
   seed-jobs.md        hand-labeled jobs (eval ground truth)
   seed_descriptions.json   optional: {job_id: description} for the seed jobs
-  cv_profile/cv_template.md   optional: copied only if you don't have one locally yet
+  cv/cv_template.md   optional: copied over cv_profile/cv_template.md on every sync
 ```

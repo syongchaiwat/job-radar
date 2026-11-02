@@ -9,7 +9,8 @@ Source layout:
     profile/                    copied over profile/ (replaced on every run)
     seed-jobs.md                copied to data/seed-jobs.md
     seed_descriptions.json      optional, copied to data/
-    cv_profile/cv_template.md   optional, copied only if cv_profile/ has no template yet
+    cv/cv_template.md           copied over cv_profile/cv_template.md (the example
+                                one is copied only if cv_profile/ has no template yet)
 """
 import os
 import shutil
@@ -60,10 +61,11 @@ def sync() -> Path:
         shutil.copy2(source_descriptions, repo_data / "seed_descriptions.json")
         print("Synced seed_descriptions.json")
 
-    # The CV template holds real contact details, so it's never overwritten once present.
-    source_template = source / "cv_profile" / "cv_template.md"
+    # A configured source owns the template, so it replaces the repo copy every run.
+    # The fictional example only fills an empty slot: it must never overwrite a real template.
+    source_template = source / "cv" / "cv_template.md"
     repo_template = REPO_ROOT / "cv_profile" / "cv_template.md"
-    if source_template.is_file() and not repo_template.exists():
+    if source_template.is_file() and (source != EXAMPLES_DIR or not repo_template.exists()):
         repo_template.parent.mkdir(exist_ok=True)
         shutil.copy2(source_template, repo_template)
         print(f"Copied CV template -> {repo_template}")

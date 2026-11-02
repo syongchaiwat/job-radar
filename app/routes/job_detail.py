@@ -1,4 +1,4 @@
-"""Job Detail page: GET /jobs/{job_id}, POST /jobs/{job_id}/tracking, POST /jobs/{job_id}/review,
+"""Job Detail page: GET /jobs/{job_id}, POST /jobs/{job_id}/review,
 POST /jobs/{job_id}/description, GET /jobs/{job_id}/breakdown, POST /jobs/{job_id}/market-data,
 POST /jobs/{job_id}/archetype, POST /jobs/{job_id}/lane, POST /jobs/{job_id}/deadline, cover letters"""
 from datetime import datetime, timezone
@@ -10,7 +10,9 @@ from sqlmodel import Session
 
 from app.constants import STATUS_OPTIONS
 from app.deps import get_session
-from app.services.jobs import enrich_and_match, get_job_bundle, set_tracking_status
+from app.services.jobs import enrich_and_match, get_job_bundle
+from src.db import Job
+from src.tracking import core as tracking_core
 from app.templating import templates
 from src.enrich.breakdown import compute_breakdown
 from src.screening.run import archetype_text, screen_job
@@ -34,47 +36,23 @@ def job_detail(job_id: str, request: Request, session: Session = Depends(get_ses
     )
 
 
-REVIEW_ACTIONS = {"archive": "ignored", "shortlist": "shortlist", "reset": "new"}
-
-
 @router.post("/jobs/{job_id}/review")
 def review(job_id: str, session: Session = Depends(get_session), action: str = Form(...)):
-    """Review bar: only sets tracking status. Preparing a CV stays a separate button (D4)."""
-    bundle = get_job_bundle(session, job_id)
-    if bundle is None:
+    """Review bar (before applying): shortlist, skip, or back to the review queue."""
+    if session.get(Job, job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    if action not in REVIEW_ACTIONS:
-        raise HTTPException(status_code=400, detail="Unknown review action")
-    tr = bundle["tracking"]
-    tr.status = REVIEW_ACTIONS[action]
-    tr.updated_at = datetime.now(timezone.utc)
-    session.add(tr)
+    try:
+        if action == "reset":
+            tracking_core.reset_triage(session, job_id)
+        elif action in ("shortlist", "skipped"):
+            tracking_core.log_stage(session, job_id, action)
+        else:
+            raise HTTPException(status_code=400, detail="Unknown review action")
+    except tracking_core.StageError as exc:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
     session.commit()
     return RedirectResponse(f"/jobs/{job_id}", status_code=303)
-
-
-@router.post("/jobs/{job_id}/tracking")
-def save_tracking(
-    job_id: str,
-    request: Request,
-    session: Session = Depends(get_session),
-    status: str = Form(...),
-    notes: str = Form(""),
-):
-    bundle = get_job_bundle(session, job_id)
-    if bundle is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    tr = set_tracking_status(session, job_id, status) if status != bundle["tracking"].status else bundle["tracking"]
-    tr.notes = notes
-    session.add(tr)
-    session.commit()
-    session.refresh(tr)
-    bundle["tracking"] = tr
-    return templates.TemplateResponse(
-        request=request,
-        name="partials/_tracking_panel.html",
-        context={**bundle, "status_options": STATUS_OPTIONS, "saved": True},
-    )
 
 
 @router.post("/jobs/{job_id}/description")

@@ -83,7 +83,9 @@ Mark postings worth learning from as **market data** (◇ on each card, or **Sel
 
 **Lanes, ranking and cover letters** (Phase 5): `profile/lanes.md` defines your application lanes (e.g. working student, thesis internship, summer internship, full-time). Each job gets a lane, an eligibility check and a lane-value score; the board ranks by priority = fit × lane value × urgency (deadline). On a job's page, **Write cover letter** drafts an English letter grounded in the job's CV and your projects, critiqued for honesty, relevance, specificity and tone; edit it and download a one-page PDF. Backfill: `python scripts/assess_lanes.py --missing`.
 
-**Review and correct:** on a job's page, **Archive** or **Shortlist**, set its archetype or lane by hand if the automatic one is wrong. A wrong description can be replaced and re-screened from the same page.
+**Review and correct:** on a job's page, **Skip** or **Shortlist**, set its archetype or lane by hand if the automatic one is wrong. A wrong description can be replaced and re-screened from the same page.
+
+**Track applications:** every step is a dated entry in a stage log: Applied, Screening call, Assessment, Interview (rounds number themselves), Offer, and an outcome (Rejected, No response, Withdrawn, Position closed, Offer declined / accepted) that closes the application while remembering how far it got. Log a stage from a board card, the tracking table (click the stage chip) or the job page; a future date means scheduled. The board's **Tracking table** view shows each application's stage, applied date, next action (upcoming interview, assessment due, debrief, follow-up after 14 quiet days), last activity and the CV / letter as sent. Interviews get a debrief (rating, questions, follow-ups); `/calendar.ics` exports upcoming events; **Market → Applications** has the funnel, response rate and time to first response, by lane, archetype, CV and source.
 
 **A CV for one job:** the job page's **CV** panel uses the latest library CV of the job's archetype (or any library version you pick), with the lane line added. **Edit for this job** opens it as Markdown; saving stores a copy for that job only, as versions, and never changes the library CV or other jobs. **Go back to the library CV** drops the copy (its versions stay as history). **Download PDF** renders what the job sends with `src/cv/style.css`, tightening spacing to fit two pages before spilling onto a third. CLI for any Markdown CV: `python scripts/cv_pdf.py <cv>.md`. Always read a CV before sending it.
 
@@ -104,9 +106,11 @@ src/
   lanes/           lane detection, assessment, priority       prompts/: assess
   cv/              CV draft/critique graph, library, export, PDF + style.css   prompts/: draft, critique
   letters/         cover letter draft/critique                prompts/: draft, critique
+  tracking/        application stage log: rules, summaries, stats, calendar export
 app/               FastAPI routes, services, Jinja2 templates, static JS
 scripts/           CLI entry points (sync, ingest, enrich, archetypes, lanes, PDFs)
 evals/             screening eval against hand-labeled jobs
+tests/             unit tests (pytest), e.g. the stage-log rules
 ```
 
 ## Architecture
@@ -116,7 +120,7 @@ ingest: manual (URL auto-fetch) + Adzuna / SerpApi / JSearch (archetype keywords
   -> enrichment: role card + skills + embedding -> archetype assignment
   -> screening LangGraph: normalize -> blurb -> filter gate -> score match -> extract gaps
   -> lanes: detection + eligibility + value -> priority
-  -> SQLite (jobs, role cards, archetypes, screenings, tracking, CVs, letters)
+  -> SQLite (jobs, role cards, archetypes, screenings, stage log, CVs, letters)
   -> FastAPI + Jinja2 + HTMX + Alpine.js dashboard: board / job detail / classify / market / CV library / skills
   -> CV library, per archetype: CV LangGraph (Sonnet drafts, Opus critiques)
        draft_cv --> critique_cv --(revise, attempts < 3)--> draft_cv

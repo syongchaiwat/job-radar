@@ -3,7 +3,7 @@
    @click="cardClick($event, '{{ row.job.id }}')" :class="isSelected('{{ row.job.id }}') ? 'ring-2 ring-accent' : ''"
    class="relative block border rounded-xl p-4 hover:border-gray-600 transition-colors bg-gray-900/60
           {% if status == 'new' %}border-accent/40{% else %}border-gray-800{% endif %}
-          {% if status in ('ignored', 'rejected') %}opacity-50{% endif %}">
+          {% if status == 'skipped' or row.app.closed %}opacity-50{% endif %}">
   <div class="flex items-start justify-between mb-2 pr-8">
     <button type="button" @click.prevent.stop="toggleBookmark('{{ row.job.id }}')"
             :title="bookmarked('{{ row.job.id }}') ? 'Remove bookmark' : 'Bookmark'"
@@ -30,7 +30,7 @@
     {% endif %}
     {% if status == 'new' %}
     <span class="text-xs bg-accent/20 text-accent rounded-md px-2 py-0.5">Needs review</span>
-    {% else %}
+    {% elif not row.app.applied %}
     <span class="text-xs border border-gray-700 text-gray-300 rounded-md px-2 py-0.5">{{ status | status_label }}</span>
     {% endif %}
     {% if row.lane_name %}<span class="text-xs border border-gray-700 text-gray-300 rounded-md px-2 py-0.5">{{ row.lane_name }}</span>{% endif %}
@@ -39,14 +39,23 @@
     <span class="text-xs border border-gray-700 text-gray-300 rounded-md px-2 py-0.5">CV · edited for this job</span>
     {% endif %}
   </div>
+  <template x-if="job('{{ row.job.id }}').app.applied">
+    <p class="flex items-center gap-2 mb-2 label-mono text-xs">
+      <span class="border rounded-md px-2 py-0.5" :class="stageClass(job('{{ row.job.id }}').app.status)" x-text="job('{{ row.job.id }}').app.stage_label"></span>
+      <span class="text-gray-400" x-text="(job('{{ row.job.id }}').app.stage_estimated ? '≈ ' : '') + fmtDay(job('{{ row.job.id }}').app.stage_date)"></span>
+      <span x-show="job('{{ row.job.id }}').app.next" :class="nextClass(job('{{ row.job.id }}').app.next)" class="truncate" x-text="'· ' + nextText(job('{{ row.job.id }}').app.next)"></span>
+    </p>
+  </template>
   {% if row.screening and row.screening.blurb %}
   <p class="text-sm text-gray-400 mb-3 line-clamp-2">{{ row.screening.blurb }}</p>
   {% elif not row.screening %}
   <p class="text-sm text-gray-600 italic mb-3">Not screened yet.</p>
   {% endif %}
   <div class="flex items-center justify-between text-xs text-gray-500">
-    <span>added {{ row.job.first_seen | relative_time }} · <span class="text-accent" title="fit x lane value x urgency">priority {{ (row.priority * 100) | round | int }}</span>{% if row.job.deadline %} · due {{ row.job.deadline }}{% endif %}</span>
+    <span>added {{ row.job.first_seen | relative_time }}{% if not row.app.applied %} · <span class="text-accent" title="fit x lane value x urgency">priority {{ (row.priority * 100) | round | int }}</span>{% if row.job.deadline %} · due {{ row.job.deadline }}{% endif %}{% endif %}</span>
     <span class="flex items-center gap-2">
+      <button type="button" @click.prevent.stop="logStage(job('{{ row.job.id }}'))"
+              class="border border-gray-700 rounded-md px-2 py-0.5 text-gray-400 hover:text-gray-100 hover:border-gray-500" title="Log a stage">+ Log</button>
       <button type="button" @click.prevent.stop="toggleMarket('{{ row.job.id }}')"
               :class="marketOn('{{ row.job.id }}') ? 'border-accent text-accent bg-accent/10' : 'border-gray-700 text-gray-500 hover:text-gray-300'"
               class="border rounded-md px-2 py-0.5" title="Market data: this posting shapes archetypes and market stats">

@@ -1,0 +1,75 @@
+{# Market page: application funnel, response stats and breakdowns, from the stage log. #}
+{% set s = app_stats %}
+<section id="applications" class="bg-gray-900/50 border border-gray-800 rounded-xl p-5 space-y-5">
+  <div class="flex flex-wrap items-baseline gap-3">
+    <h2 class="text-xl font-semibold">Applications</h2>
+    <span class="label-mono text-xs text-gray-500">{{ s.n }} applied · {{ s.open }} open</span>
+    {% if s.n_estimated %}<span class="label-mono text-xs text-amber-300" title="Dates guessed during migration: fix them on each job's timeline">≈ {{ s.n_estimated }} with estimated dates</span>{% endif %}
+  </div>
+  {% if not s.n %}
+  <p class="text-sm text-gray-500">No applications logged yet.</p>
+  {% else %}
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div class="border border-gray-800 rounded-lg px-4 py-3"><p class="text-xs uppercase tracking-wide text-gray-500">Response rate</p>
+      <p class="text-2xl font-bold">{{ (s.response_rate * 100) | round | int }}%</p><p class="text-xs text-gray-500">{{ s.responded }} of {{ s.n }} heard back</p></div>
+    <div class="border border-gray-800 rounded-lg px-4 py-3"><p class="text-xs uppercase tracking-wide text-gray-500">Median first response</p>
+      <p class="text-2xl font-bold">{% if s.median_first_response is not none %}{{ s.median_first_response | round | int }} <span class="text-base font-normal text-gray-400">days</span>{% else %}–{% endif %}</p>
+      <p class="text-xs text-gray-500">over {{ s.n_first_response }} responses</p></div>
+    <div class="border border-gray-800 rounded-lg px-4 py-3"><p class="text-xs uppercase tracking-wide text-gray-500">Reached interview</p>
+      <p class="text-2xl font-bold">{{ s.interviewed }}</p><p class="text-xs text-gray-500">{{ ((s.interviewed / s.n) * 100) | round | int }}% of applications</p></div>
+    <div class="border border-gray-800 rounded-lg px-4 py-3"><p class="text-xs uppercase tracking-wide text-gray-500">Offers</p>
+      <p class="text-2xl font-bold">{{ s.offers }}</p><p class="text-xs text-gray-500">{% for o in s.outcomes %}{{ o.label }} {{ o.n }}{% if not loop.last %} · {% endif %}{% endfor %}</p></div>
+  </div>
+
+  <div>
+    <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Funnel (furthest stage reached)</p>
+    <div class="space-y-1.5">
+      {% for f in s.funnel %}
+      <div class="grid grid-cols-[8rem_1fr_4.5rem] items-center gap-3 text-sm">
+        <span class="text-gray-300">{{ f.label }}</span>
+        <span class="h-2.5 bg-gray-800 rounded-full overflow-hidden"><span class="block h-full rounded-full {% if loop.index0 < 2 %}bg-green-400{% elif loop.index0 < 4 %}bg-amber-400{% else %}bg-accent{% endif %}" style="width: {{ (f.share * 100) | round(1) }}%"></span></span>
+        <span class="label-mono text-xs text-gray-400 text-right tabular">{{ f.n }} · {{ (f.share * 100) | round | int }}%</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+    {% for field, title in [("lane", "By lane"), ("archetype", "By archetype"), ("cv", "By CV sent"), ("source", "By source")] %}
+    <div>
+      <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">{{ title }}</p>
+      <table class="w-full text-sm">
+        <thead><tr class="text-left label-mono text-[11px] uppercase text-gray-500 border-b border-gray-800">
+          <th class="py-1.5 font-medium"></th><th class="py-1.5 font-medium text-right">Applied</th><th class="py-1.5 font-medium text-right">Response</th><th class="py-1.5 font-medium text-right">Interview</th><th class="py-1.5 font-medium text-right">Offer</th>
+        </tr></thead>
+        <tbody>
+          {% for r in s.by[field] %}
+          <tr class="border-b border-gray-800/60 last:border-0">
+            <td class="py-1.5 pr-2 text-gray-300">{% if field == 'lane' %}{{ lane_names.get(r.key, r.key) }}{% else %}{{ r.key | capitalize if field == 'source' else r.key }}{% endif %}</td>
+            <td class="py-1.5 text-right tabular">{{ r.n }}</td>
+            <td class="py-1.5 text-right tabular">{{ (r.response_rate * 100) | round | int }}%</td>
+            <td class="py-1.5 text-right tabular">{{ r.interviewed }}</td>
+            <td class="py-1.5 text-right tabular">{{ r.offers }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <details class="border-t border-gray-800 pt-4" id="questions">
+    <summary class="text-sm text-gray-300 cursor-pointer">Interview questions I've been asked ({{ questions | length }})</summary>
+    {% if questions %}
+    <ul class="mt-3 space-y-2 text-sm">
+      {% for q in questions %}
+      <li class="flex gap-3"><span class="text-gray-200 flex-1">{{ q.question }}</span>
+        <a href="/jobs/{{ q.job_id }}#application" class="label-mono text-[11px] text-gray-500 hover:text-accent shrink-0 text-right">{{ q.company }} · {{ q.stage }}{% if q.kind %} ({{ q.kind }}){% endif %} · {{ q.date }}</a></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="mt-2 text-sm text-gray-500">Add questions in an interview's debrief (job page → Application → Edit) and they collect here.</p>
+    {% endif %}
+  </details>
+</section>

@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 from sqlmodel import Session, select
 
+from src.tracking import core as tracking_core
 from src.db import Archetype, ArchetypeSet, GroundTruth, JobCV, Job, JobArchetype, JobSkill, RoleCard, Screening, Skill, Tracking
 
 
@@ -49,6 +50,7 @@ def list_board_rows(session: Session) -> list[dict]:
     screenings = _latest_screening_by_job(session)
     trackings = {t.job_id: t for t in session.exec(select(Tracking)).all()}
     own_cv = _jobs_with_own_cv(session)
+    events = tracking_core.all_events(session)
 
     return [
         {
@@ -56,20 +58,10 @@ def list_board_rows(session: Session) -> list[dict]:
             "screening": screenings.get(job.id),
             "tracking": trackings.get(job.id),
             "own_cv": job.id in own_cv,
+            "app": tracking_core.summary(events.get(job.id, [])),
         }
         for job in jobs
     ]
-
-
-def set_tracking_status(session: Session, job_id: str, status: str) -> Tracking:
-    """Change a job's status; the first move to "applied" stamps applied_at."""
-    tr = _ensure_tracking(session, job_id)
-    tr.status = status
-    if status == "applied" and tr.applied_at is None:
-        tr.applied_at = datetime.now(timezone.utc)
-    tr.updated_at = datetime.now(timezone.utc)
-    session.add(tr)
-    return tr
 
 
 def get_job_bundle(session: Session, job_id: str) -> dict | None:
@@ -91,6 +83,21 @@ def get_job_bundle(session: Session, job_id: str) -> dict | None:
         **_cvlib_bundle(session, job),
         **_lane_bundle(session, job),
         "role_card_skills": _skills_for(session, job_id),
+        **_application_bundle(session, job, tracking),
+    }
+
+
+def _application_bundle(session: Session, job: Job, tracking: Tracking) -> dict:
+    from app.services import tracking as tsvc
+
+    related = session.get(Job, tracking.related_job_id) if tracking.related_job_id else None
+    return {
+        "application": tsvc.application_json(session, job.id),
+        "same_company_jobs": tsvc.same_company_jobs(session, job),
+        "related_job": related,
+        "stage_options": tracking_core.STAGES,
+        "interview_kinds": tracking_core.INTERVIEW_KINDS,
+        "formats": tracking_core.FORMATS,
     }
 
 

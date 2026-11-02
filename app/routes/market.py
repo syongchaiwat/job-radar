@@ -8,7 +8,10 @@ from fastapi.responses import RedirectResponse
 from sqlmodel import Session, select
 
 from app.deps import get_session
+from app.services.jobs import active_archetypes, job_archetypes
 from app.templating import templates
+from src.lanes.core import load_lanes
+from src.tracking.stats import application_stats, question_bank
 from src.db import Archetype, MarketSuggestion, MarketTodo, ProfileTerm
 from src.market.stats import market_overview
 from src.profile import context as pc
@@ -16,6 +19,12 @@ from src.llm.call import call, load_prompt
 from src.llm.schemas import NextSteps
 
 router = APIRouter()
+
+
+def _archetype_names(session: Session) -> dict[str, str]:
+    aset, archetypes = active_archetypes(session)
+    names = {a.id: a.name for a in archetypes}
+    return {jid: names.get(m["primary"].archetype_id) for jid, m in job_archetypes(session, aset).items() if m.get("primary")}
 
 # Graduation and the end of the 6-month job-search permit (Art. 21 Abs. 3 FNIA), see constraints.md
 GRADUATION = date(2027, 6, 30)
@@ -37,7 +46,10 @@ def market_page(request: Request, a: str | None = None, session: Session = Depen
         context={"overview": overview, "rows": rows, "current": current, "suggestion": suggestion,
                  "suggestion_row": session.get(MarketSuggestion, current["archetype"].id) if current else None, "todos": todos,
                  "days_to_graduation": (GRADUATION - date.today()).days,
-                 "days_to_permit_deadline": (PERMIT_DEADLINE - date.today()).days},
+                 "days_to_permit_deadline": (PERMIT_DEADLINE - date.today()).days,
+                 "app_stats": application_stats(session, _archetype_names(session)),
+                 "questions": question_bank(session),
+                 "lane_names": {l.key: l.name for l in load_lanes()} | {"none": "No lane"}},
     )
 
 
