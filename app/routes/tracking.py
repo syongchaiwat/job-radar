@@ -41,13 +41,14 @@ def _ok(session: Session, job_id: str) -> JSONResponse:
 @router.post("/jobs/{job_id}/stages")
 async def log_stage(job_id: str, request: Request, session: Session = Depends(get_session)):
     """Log a stage from the board or the job page (the shared Log stage form)."""
-    _job(session, job_id)
+    job = _job(session, job_id)
     form = await request.form()
     try:
         core.log_stage(
             session, job_id, form.get("stage", ""), on=form.get("date"), time=form.get("time"),
             detail=svc.detail_from_form(form), note=(form.get("note") or "").strip(),
             applied_on=form.get("applied_on"), reopen=form.get("reopen") == "1", snapshot=svc.snapshot,
+            kind=job.kind,
         )
     except core.NeedsReopen as exc:
         session.rollback()
@@ -134,7 +135,7 @@ def _ics_title(session: Session, ev: StageEvent) -> str:
     job = session.get(Job, ev.job_id)
     d = core.detail_of(ev)
     kind = f" ({d['kind']})" if d.get("kind") else ""
-    return f"{core.event_label(ev)}{kind}: {job.company if job else ''}, {job.title if job else ''}"
+    return f"{core.event_label(ev, job.kind if job else 'job')}{kind}: {job.company if job else ''}, {job.title if job else ''}"
 
 
 def _ics_response(body: str, name: str) -> Response:

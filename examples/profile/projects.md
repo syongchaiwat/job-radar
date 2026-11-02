@@ -5,7 +5,7 @@ description: Project database (fictional example), tagged by source, feeding the
 
 # Project Database
 
-Format per entry: Type (work/study/personal), Source (matches an anchor in `cv_profile/cv_template.md`, or the project's own name for personal work), Render section (only for `study` entries: `education` nests it under the degree, `projects` promotes it to the Projects section), Period, Repo (optional public repository URL, the only repo links a CV may show), Tools (explicit and exhaustive), Methodology, Results. Role angles are optional hints per kind of role; a dash means the project doesn't help that kind of role.
+Format per entry: Type (work/study/personal), Source (matches an anchor in `cv_profile/cv_template.md`, or the project's own name for personal work), Render section (only for `study` entries: `education` nests it under the degree, `projects` promotes it to the Projects section), CV label (optional: the exact name the CV must use for this entry), Period, Repo (optional public repository URL, the only repo links a CV may show), Tools (explicit and exhaustive), Methodology, Results. Role angles are optional hints per kind of role; a dash means the project doesn't help that kind of role.
 
 ---
 

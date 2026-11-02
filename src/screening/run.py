@@ -94,7 +94,7 @@ def run_all():
     engine = init_db(get_engine())
     with Session(engine) as session:
         already_screened = set(session.exec(select(Screening.job_id)).all())
-        todo = [j for j in session.exec(select(Job)).all() if j.id not in already_screened]
+        todo = [j for j in session.exec(select(Job).where(Job.kind == "job")).all() if j.id not in already_screened]  # labs are never screened
         print(f"{len(todo)} unscreened jobs")
         for i, job in enumerate(todo, 1):
             screening = screen_job(job, archetype_text(session, job.id))

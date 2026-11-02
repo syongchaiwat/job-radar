@@ -50,6 +50,14 @@ def lanes_hash() -> str:
     return hashlib.sha1(lanes_text().encode()).hexdigest()
 
 
+OUTREACH_LANE = "academic-thesis"  # lab outreach entries only: never offered for job postings
+
+
+def job_lanes() -> list[Lane]:
+    """Lanes a job posting can be in (everything except the lab outreach lane)."""
+    return [l for l in load_lanes() if l.key != OUTREACH_LANE]
+
+
 def lane_by_key(key: str | None) -> Lane | None:
     return next((l for l in load_lanes() if l.key == key), None)
 
@@ -72,7 +80,7 @@ def _timeline(card: RoleCard, title: str, description: str | None) -> dict:
 def detect(card: RoleCard, title: str, description: str | None = None) -> str | None:
     """Clear cases only; None means 'let the LLM decide'. Keys follow lanes.md.
     Timeline first: a fixed-length full-time internship is never a working-student job."""
-    keys = {l.key for l in load_lanes()}
+    keys = {l.key for l in job_lanes()}
     t = _timeline(card, title, description)
     pick = None
     if t["thesis"] or t["type"] == "thesis":
@@ -105,7 +113,7 @@ def _lanes_prompt(lanes: list[Lane]) -> str:
 def assess_job(session: Session, job: Job) -> LaneAssessment | None:
     """Lane (unless you set it), eligibility, lane value and deadline. Caller commits."""
     card = session.get(RoleCard, job.id)
-    lanes = load_lanes()
+    lanes = job_lanes()
     if card is None or not lanes:
         return None
     fixed = job.lane if job.lane_source == "user" else detect(card, job.title, job.description)

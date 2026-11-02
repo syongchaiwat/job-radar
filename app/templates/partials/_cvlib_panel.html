@@ -1,17 +1,21 @@
 {# Job page CV: pick a CV (this job's last saved copy, or a library CV by archetype + version),
    preview it before switching, and edit a copy for this job only. #}
-{% set sent_md = edited_cv.markdown if edited_cv else job_cv_markdown %}
+{% set sent_md = edited_cv.markdown if edited_cv else job_cv_markdown %}{% set what = 'lab' if job.kind == 'outreach' else 'job' %}
 <div id="cv-library" x-data='cvPanel({{ cv_picker | tojson }})' class="border {% if edited_cv or job_cv %}border-accent/40{% else %}border-gray-800{% endif %} rounded-lg p-4 space-y-3">
   <div class="flex flex-wrap items-center gap-2">
     <p class="text-xs uppercase tracking-wide text-gray-500 mr-2">CV in use</p>
     {% if edited_cv %}
-    <span class="font-semibold">Edited for this job</span>
-    <span class="text-xs border border-amber-600 text-amber-300 rounded-full px-2 py-0.5">only this job</span>
+    <span class="font-semibold">Edited for this {{ what }}</span>
+    <span class="text-xs border border-amber-600 text-amber-300 rounded-full px-2 py-0.5">only this {{ what }}</span>
     <span class="text-xs text-gray-500">v{{ edited_cv_versions }} · saved {{ edited_cv.created_at | relative_time }}
-      {% if edited_cv_base %} · from the {{ edited_cv_base.archetype_slug }} CV v{{ edited_cv_base.id }}{% elif not edited_cv.base_cv_version_id %} · from the old per-job flow{% endif %}</span>
+      {% if edited_cv_base %} · from the {{ cv_names.get(edited_cv_base.archetype_slug, edited_cv_base.archetype_slug) }} CV v{{ edited_cv_base.id }}{% elif not edited_cv.base_cv_version_id %} · from the old per-job flow{% endif %}</span>
     {% elif job_cv %}
-    <span class="font-semibold">{{ job_cv_archetype.name if job_cv_archetype else job_cv.archetype_slug }} CV</span>
-    <span class="text-xs text-gray-500">library v{{ job_cv.id }} · {{ job_cv.created_at | relative_time }}{% if job.cv_version_id %} · chosen for this job{% else %} · latest of this job's archetype{% endif %}</span>
+    <span class="font-semibold">{{ cv_names.get(job_cv.archetype_slug, job_cv.archetype_slug) }}{% if not job_cv.custom_cv_id %} CV{% endif %}</span>
+    {% if job_cv.custom_cv_id %}<span class="text-xs bg-accent-dim/20 text-accent rounded-md px-2 py-0.5">own CV</span>{% endif %}
+    <span class="text-xs text-gray-500">library v{{ job_cv.id }} · {{ job_cv.created_at | relative_time }}{% if job.cv_version_id %} · chosen for this {{ what }}{% elif what == 'lab' %} · latest of your newest Thesis CV{% else %} · latest of this job's archetype{% endif %}</span>
+    {% elif what == 'lab' %}
+    <span class="text-sm text-gray-400">No Thesis CV yet.</span>
+    <a href="/cvs/new" class="text-sm text-accent hover:underline">Create one in the CV library</a>
     {% elif job_archetype %}
     <span class="text-sm text-gray-400">No CV for {{ job_archetype.name }} yet.</span>
     <a href="/cvs/{{ job_archetype.id }}" class="text-sm text-accent hover:underline">Generate it in the CV library</a>
@@ -21,20 +25,20 @@
     {% if edited_cv or job_cv %}
     <span class="sm:ml-auto flex items-center gap-3">
       <button type="button" @click="editing = !editing" class="border border-gray-700 rounded px-3 py-1 text-sm hover:border-gray-500">
-        <span x-show="!editing">{% if edited_cv %}Edit{% else %}Edit for this job{% endif %}</span><span x-show="editing" x-cloak>Cancel edit</span></button>
+        <span x-show="!editing">{% if edited_cv %}Edit{% else %}Edit for this {{ what }}{% endif %}</span><span x-show="editing" x-cloak>Cancel edit</span></button>
       <a href="/jobs/{{ job.id }}/cv/pdf" class="text-sm text-accent hover:underline">Download PDF</a>
     </span>
     {% endif %}
   </div>
-  {% if not edited_cv and lane_sentence %}<p class="text-xs text-gray-500">Lane line added to the summary for this job: <span class="text-gray-300">"{{ lane_sentence }}"</span></p>{% endif %}
+  {% if not edited_cv and lane_sentence %}<p class="text-xs text-gray-500">Lane line added to the summary for this {{ what }}: <span class="text-gray-300">"{{ lane_sentence }}"</span></p>{% endif %}
 
   {# Editing: always the CV in use; saving makes a new version for this job only. #}
   {% if edited_cv or job_cv %}
   <form x-show="editing" x-cloak method="post" action="/jobs/{{ job.id }}/cv/edit" class="space-y-2">
     <input type="hidden" name="base_cv_version_id" value="{{ edited_cv.base_cv_version_id if edited_cv and edited_cv.base_cv_version_id else (job_cv.id if job_cv else '') }}">
     <textarea name="markdown" rows="28" class="w-full bg-gray-900 border border-gray-700 rounded p-3 text-sm font-mono leading-relaxed">{{ sent_md }}</textarea>
-    <p class="text-xs text-gray-500">Saves a copy for this job only{% if not edited_cv %} (starting from the library CV with its lane line){% endif %}. The library CV stays as it is.</p>
-    <button class="border border-accent text-accent rounded px-4 py-1.5 text-sm hover:bg-accent/10">Save for this job{% if edited_cv %} as v{{ edited_cv_versions + 1 }}{% endif %}</button>
+    <p class="text-xs text-gray-500">Saves a copy for this {{ what }} only{% if not edited_cv %} (starting from the library CV with its lane line){% endif %}. The library CV stays as it is.</p>
+    <button class="border border-accent text-accent rounded px-4 py-1.5 text-sm hover:bg-accent/10">Save for this {{ what }}{% if edited_cv %} as v{{ edited_cv_versions + 1 }}{% endif %}</button>
   </form>
   {% endif %}
 
@@ -45,7 +49,7 @@
       <span class="text-gray-500 text-xs">Preview</span>
       <select x-model="src" @change="pickSource()" class="bg-gray-900 border border-gray-700 rounded px-2 py-1">
         <template x-if="saved.length"><option value="saved" :selected="src === 'saved'">This job's saved CV</option></template>
-        <template x-for="g in groups" :key="g.slug"><option :value="g.slug" :selected="g.slug === src" x-text="g.name + (g.slug === own ? ' (this job’s archetype)' : '')"></option></template>
+        <template x-for="g in groups" :key="g.slug"><option :value="g.slug" :selected="g.slug === src" x-text="(g.own ? 'Own: ' : '') + g.name + (g.slug === own ? cfg.own_label : '')"></option></template>
       </select>
       <select x-show="src !== 'saved'" x-model="ver" @change="load()" class="bg-gray-900 border border-gray-700 rounded px-2 py-1">
         <template x-if="src === own"><option value="">Latest (follows new versions)</option></template>

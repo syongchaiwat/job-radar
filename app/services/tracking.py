@@ -46,7 +46,8 @@ def sent_letter(session: Session, letter_id: int | None) -> CoverLetter | None:
 
 def application_json(session: Session, job_id: str) -> dict:
     tr = core.ensure_tracking(session, job_id)
-    return {**core.summary(core.events_for(session, job_id)), **tracking_fields(tr)}
+    job = session.get(Job, job_id)
+    return {**core.summary(core.events_for(session, job_id), job.kind if job else "job"), **tracking_fields(tr)}
 
 
 def tracking_fields(tr) -> dict:

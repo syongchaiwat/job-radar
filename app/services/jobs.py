@@ -58,7 +58,7 @@ def list_board_rows(session: Session) -> list[dict]:
             "screening": screenings.get(job.id),
             "tracking": trackings.get(job.id),
             "own_cv": job.id in own_cv,
-            "app": tracking_core.summary(events.get(job.id, [])),
+            "app": tracking_core.summary(events.get(job.id, []), job.kind),
         }
         for job in jobs
     ]
@@ -168,9 +168,11 @@ def _cvlib_bundle(session: Session, job: Job) -> dict:
         latest_by_slug[cv.archetype_slug] = cv
     aset, archetypes = active_archetypes(session)
     by_slug = {a.slug: a for a in archetypes}
+    names = library.cv_names(session)
     return {
         "job_cv": job_cv,
         "job_cv_archetype": by_slug.get(job_cv.archetype_slug) if job_cv else None,
+        "cv_names": names,
         "job_cv_markdown": library_md,
         "edited_cv": edited,
         "edited_cv_versions": n_edits,
@@ -187,22 +189,37 @@ def _cv_picker(session: Session, by_slug: dict, current, job: Job) -> dict:
     from src.cv.library import primary_archetype
     from src.db import CVVersion
 
+    from src.cv import library
+    from src.cv.library import custom_slug, customs, cv_names
+
+    names = cv_names(session)
+    hidden = {custom_slug(c) for c in customs(session, include_archived=True) if c.archived}
+    if current is not None:
+        hidden.discard(current.archetype_slug)
     groups: dict[str, dict] = {}
     for cv in session.exec(select(CVVersion).order_by(CVVersion.id.desc())).all():
-        a = by_slug.get(cv.archetype_slug)
-        g = groups.setdefault(cv.archetype_slug, {"slug": cv.archetype_slug, "name": a.name if a else cv.archetype_slug, "versions": []})
+        if cv.archetype_slug in hidden:
+            continue
+        own_cv = cv.archetype_slug.startswith("custom-")
+        g = groups.setdefault(cv.archetype_slug, {"slug": cv.archetype_slug, "name": names.get(cv.archetype_slug, cv.archetype_slug),
+                                                  "own": own_cv, "versions": []})
         g["versions"].append({"id": cv.id, "label": f"v{cv.id}{' (edited)' if cv.model_used == 'manual-edit' else ''} · {cv.created_at.strftime('%d %b')}"})
     own = primary_archetype(session, job.id)
-    order = sorted(groups.values(), key=lambda g: (g["slug"] != (own.slug if own else None), g["name"]))
+    own_slug = own.slug if own else None
+    if job.kind == "outreach":  # its "own" CV is the default Thesis CV it follows
+        default = library.default_thesis_cv(session)
+        own_slug = default.archetype_slug if default else None
+    order = sorted(groups.values(), key=lambda g: (g["slug"] != own_slug, not g["own"], g["name"]))
     from src.cv.library import job_cv, job_cv_versions
 
     saved_rows = job_cv_versions(session, job.id)
     active = job_cv(session, job.id)
-    lib_slug = current.archetype_slug if current else (own.slug if own else (order[0]["slug"] if order else None))
+    lib_slug = current.archetype_slug if current else (own_slug or (order[0]["slug"] if order else None))
     return {
         "job_id": job.id,
         "groups": order,
-        "own_slug": own.slug if own else None,
+        "own_slug": own_slug,
+        "own_label": " (default Thesis CV)" if job.kind == "outreach" else " (this job’s archetype)",
         "saved": [{"id": r.id, "label": f"v{len(saved_rows) - i} · {r.created_at.strftime('%d %b %H:%M')}"
                    + (" · newest" if i == 0 else "")} for i, r in enumerate(saved_rows)],
         "in_use": "saved" if active else "library",
@@ -231,11 +248,11 @@ def ranking_for(session: Session, job: Job, evidenced: set[int]) -> dict:
 
 def _lane_bundle(session: Session, job: Job) -> dict:
     from src.letters import core as letters
-    from src.lanes.core import lane_by_key, load_lanes
+    from src.lanes.core import job_lanes, lane_by_key
 
     r = ranking_for(session, job, evidenced_skill_ids(session))
     return {
-        "lanes": load_lanes(),
+        "lanes": job_lanes(),
         "job_lane": lane_by_key(job.lane),
         "lane_assessment": r["assessment"],
         "fit": r["fit"], "urgency": r["urgency"], "urgency_note": r["urgency_note"], "priority": r["priority"],

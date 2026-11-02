@@ -59,6 +59,22 @@
   </div>
   {% endif %}
 
+  {% set o = outreach %}
+  {% if o and o.n %}
+  <div class="border-t border-gray-800 pt-4" id="outreach">
+    <div class="flex flex-wrap items-baseline gap-3 mb-3">
+      <h3 class="text-lg font-semibold">Lab outreach</h3>
+      <a href="/?view=labs" class="label-mono text-xs text-gray-500 hover:text-accent">{{ o.n }} lab{{ 's' if o.n != 1 }} · open on the board →</a>
+    </div>
+    <div class="grid grid-cols-3 sm:grid-cols-6 gap-3 text-center">
+      {% for label, v in [("To contact", o.to_contact), ("Sent", o.sent), ("Replied", o.replied), ("Meetings", o.meetings), ("Topics offered", o.topics), ("Agreed", o.agreed)] %}
+      <div class="border border-gray-800 rounded-lg px-2 py-2"><p class="text-xl font-bold tabular">{{ v }}</p><p class="text-[11px] uppercase tracking-wide text-gray-500">{{ label }}</p></div>
+      {% endfor %}
+    </div>
+    <p class="text-xs text-gray-500 mt-2">{% if o.sent %}{{ ((o.replied / o.sent) * 100) | round | int }}% replied{% if o.median_days_to_reply is not none %} · median {{ o.median_days_to_reply | round | int }} days to reply{% endif %}{% else %}Nothing sent yet.{% endif %}</p>
+  </div>
+  {% endif %}
+
   <details class="border-t border-gray-800 pt-4" id="questions">
     <summary class="text-sm text-gray-300 cursor-pointer">Interview questions I've been asked ({{ questions | length }})</summary>
     {% if questions %}

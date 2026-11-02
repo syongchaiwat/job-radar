@@ -108,7 +108,7 @@ def confirm(session: Session, run: ClassifyRun, progress=lambda m: None) -> Arch
 
     # jobs outside the pool (market data off, or added since) get assigned against the new set
     pool_ids = set(proposal["jobs"])
-    others = [j.id for j in session.exec(select(Job)).all() if j.id not in pool_ids]
+    others = [j.id for j in session.exec(select(Job).where(Job.kind == "job")).all() if j.id not in pool_ids]  # labs get no archetype
     for i, jid in enumerate(others, 1):
         progress(f"Assigning jobs outside the pool {i}/{len(others)}")
         assign_job(session, jid)

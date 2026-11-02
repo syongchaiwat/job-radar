@@ -8,9 +8,25 @@
   <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-5">
     <div>
       <p class="label-mono text-xs uppercase text-gray-500 mb-1">Pipeline <span class="text-gray-700 mx-1">•</span> <span class="text-gray-400" x-text="jobs.length + ' tracked'"></span></p>
-      <h1 class="text-3xl sm:text-4xl font-bold">Board</h1>
-      <div class="flex flex-wrap gap-2 mt-3 label-mono text-xs">
-        <span class="bg-gray-900 border border-gray-800 text-gray-300 rounded-md px-2.5 py-1" x-text="visible.length + ' shown of ' + jobs.length"></span>
+      <div class="flex flex-wrap items-center gap-4">
+        <h1 class="text-3xl sm:text-4xl font-bold">Board</h1>
+        <div class="inline-flex bg-gray-900 border border-gray-800 rounded-md p-0.5 text-sm" role="group" aria-label="Jobs or labs">
+          <button @click="setSection('jobs')" :class="section === 'jobs' ? 'bg-gray-800 text-gray-100' : 'text-gray-400 hover:text-gray-200'" class="rounded px-3 py-1.5">
+            Jobs <span class="label-mono text-xs text-gray-500" x-text="jobs.filter(j => j.kind !== 'outreach').length"></span></button>
+          <button @click="setSection('labs')" :class="section === 'labs' ? 'bg-gray-800 text-gray-100' : 'text-gray-400 hover:text-gray-200'" class="rounded px-3 py-1.5">
+            Labs <span class="label-mono text-xs text-gray-500" x-text="jobs.filter(j => j.kind === 'outreach').length"></span></button>
+        </div>
+      </div>
+      <div x-show="section === 'labs'" x-cloak class="flex flex-wrap gap-2 mt-3 label-mono text-xs">
+        <span class="bg-gray-900 border border-gray-800 text-gray-300 rounded-md px-2.5 py-1" x-text="visible.length + ' shown of ' + sectionJobs.length"></span>
+        <button @click="labFilter = 'contact'" class="bg-accent-dim/20 text-accent rounded-md px-2.5 py-1 hover:bg-accent-dim/30" x-text="countWhere(j => j.status === 'new') + ' to contact'"></button>
+        <button @click="labFilter = 'waiting'" class="bg-green-500/15 text-green-300 rounded-md px-2.5 py-1 hover:bg-green-500/25" x-text="countWhere(j => j.status === 'applied') + ' waiting for reply'"></button>
+        <button @click="labFilter = 'replied'" class="bg-green-500/15 text-green-300 rounded-md px-2.5 py-1 hover:bg-green-500/25" x-text="countWhere(j => j.app.applied && !j.app.closed && j.app.reached >= 2) + ' replied'"></button>
+        <button @click="labFilter = 'upcoming'" class="bg-amber-500/15 text-amber-300 rounded-md px-2.5 py-1 hover:bg-amber-500/25" x-text="countWhere(j => j.app.next && j.app.next.kind === 'upcoming') + ' meetings upcoming'"></button>
+        <button @click="labFilter = 'closed'" class="bg-gray-800 text-gray-400 rounded-md px-2.5 py-1 hover:bg-gray-700" x-text="countWhere(j => j.app.closed) + ' closed'"></button>
+      </div>
+      <div x-show="section === 'jobs'" class="flex flex-wrap gap-2 mt-3 label-mono text-xs">
+        <span class="bg-gray-900 border border-gray-800 text-gray-300 rounded-md px-2.5 py-1" x-text="visible.length + ' shown of ' + sectionJobs.length"></span>
         <button @click="statusFilter = 'review'" class="bg-accent-dim/20 text-accent rounded-md px-2.5 py-1 hover:bg-accent-dim/30" x-text="countWhere(j => j.status === 'new') + ' need review'"></button>
         <button @click="statusFilter = 'applied'; appliedScope = 'open'" class="bg-green-500/15 text-green-300 rounded-md px-2.5 py-1 hover:bg-green-500/25" x-text="countWhere(j => j.app.applied && !j.app.closed) + ' open applications'"></button>
         <button @click="statusFilter = 'upcoming'" class="bg-amber-500/15 text-amber-300 rounded-md px-2.5 py-1 hover:bg-amber-500/25" x-text="countWhere(j => j.app.next && j.app.next.kind === 'upcoming') + ' upcoming'"></button>
@@ -30,13 +46,36 @@
           Tracking table
         </button>
       </div>
-      <button x-show="!selecting" @click="selecting = true" class="border border-gray-800 bg-gray-900 rounded-md px-3 py-1.5 text-sm text-gray-300 hover:border-gray-600">Select jobs</button>
+      <button x-show="!selecting && section === 'jobs'" @click="selecting = true" class="border border-gray-800 bg-gray-900 rounded-md px-3 py-1.5 text-sm text-gray-300 hover:border-gray-600">Select jobs</button>
     </div>
   </div>
 
   {% include "partials/_add_job.html" %}
 
-  <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 mb-6 space-y-3">
+  <div x-show="section === 'labs'" x-cloak class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 mb-6 space-y-3">
+    <div class="flex flex-col md:flex-row md:items-center gap-3">
+      <label class="relative flex-1 md:max-w-md">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="m11 11 3.5 3.5"/></svg>
+        <input type="text" x-model="search" placeholder="Search lab, topic or professor"
+               class="w-full bg-gray-950 border border-gray-800 rounded-md pl-9 pr-3 py-2 text-sm placeholder-gray-500 focus:outline-none focus:border-accent-dim">
+      </label>
+      <div class="flex flex-wrap items-center gap-1.5 md:ml-auto">
+        <span class="text-xs uppercase tracking-wide text-gray-500 mr-1">Sort</span>
+        <template x-for="(label, key) in labSorts" :key="key">
+          <button @click="labSort = key" :class="pillClass(labSort === key)" class="border rounded-md px-2.5 py-1 text-xs" x-text="label"></button>
+        </template>
+      </div>
+    </div>
+    <div class="flex flex-wrap items-center gap-1.5">
+      <span class="text-xs uppercase tracking-wide text-gray-500 w-24">Show</span>
+      <template x-for="(label, key) in labFilters" :key="key">
+        <button @click="labFilter = key" :class="pillClass(labFilter === key)" class="border rounded-md px-2.5 py-1 text-xs" x-text="label"></button>
+      </template>
+      <a href="/calendar.ics" class="label-mono text-xs text-gray-500 hover:text-accent ml-auto" title="Upcoming calls, interviews, meetings and assessment deadlines">Calendar .ics</a>
+    </div>
+  </div>
+
+  <div x-show="section === 'jobs'" class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 mb-6 space-y-3">
     <div class="flex flex-col md:flex-row md:items-center gap-3">
       <label class="relative flex-1 md:max-w-md">
         <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="m11 11 3.5 3.5"/></svg>
@@ -98,13 +137,13 @@
 
   <div x-show="view === 'cards'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
     {% for row in rows %}
-      {% include "partials/_card.html" %}
+      {% if row.job.kind == 'outreach' %}{% include "partials/_lab_card.html" %}{% else %}{% include "partials/_card.html" %}{% endif %}
     {% endfor %}
   </div>
 
   {% include "partials/_tracking_table.html" %}
 
-  <p x-show="visible.length === 0" x-cloak class="text-sm text-gray-500 mt-2">No jobs match these filters.</p>
+  <p x-show="visible.length === 0" x-cloak class="text-sm text-gray-500 mt-2" x-text="section === 'labs' ? (sectionJobs.length ? 'No labs match this filter.' : 'No labs yet: paste a lab page above to add one.') : 'No jobs match these filters.'"></p>
 </div>
 {% include "partials/_stage_modal.html" %}
 <script src="{{ static_url('js/board.js') }}"></script>

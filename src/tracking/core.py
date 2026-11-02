@@ -5,6 +5,10 @@ Stages fall in three groups:
 - process: applied and everything after it. Needs an Applied event; any order.
 - outcome: closes an application, remembering the furthest stage reached.
 
+Lab outreach entries (Job.kind == "outreach") use the same log with their own names:
+Sent, Replied, Meeting, Topic offered, Agreed / Declined / No topic / No reply. "New" reads
+"To contact"; there is no Assessment, Shortlist or Position closed.
+
 Tracking.status is a cache of the log (the latest event, an outcome always winning),
 so the board's filters and sorts never have to read the events. Only `log_stage`,
 `update_event` and `delete_event` change the log, and each re-syncs the cache.
@@ -48,6 +52,27 @@ STAGES = {s.key: s for s in [
 ]}
 STATUS_LABELS = {"new": "New", **{k: s.label for k, s in STAGES.items()}}
 STEPPER = ["applied", "screening", "interview", "offer"]  # the board's mini progress line
+
+OUTREACH_LABELS = {
+    "new": "To contact", "skipped": "Skipped", "applied": "Sent", "screening": "Replied", "interview": "Meeting",
+    "offer": "Topic offered", "rejected": "No topic", "no_response": "No reply", "withdrawn": "Withdrawn",
+    "declined": "Declined", "accepted": "Agreed",
+}
+OUTREACH_SCHEDULED = {"interview"}  # a reply is an email, a meeting has a time and a debrief
+
+
+def labels_for(kind: str = "job") -> dict[str, str]:
+    return OUTREACH_LABELS if kind == "outreach" else STATUS_LABELS
+
+
+def label(stage: str, kind: str = "job") -> str:
+    return labels_for(kind).get(stage, stage)
+
+
+def is_scheduled(stage: str, kind: str = "job") -> bool:
+    if kind == "outreach":
+        return stage in OUTREACH_SCHEDULED
+    return STAGES[stage].scheduled if stage in STAGES else False
 
 INTERVIEW_KINDS = ["Recruiter screen", "Technical", "Case study", "Behavioural / hiring manager", "Final / onsite"]
 FORMATS = ["Video", "Phone", "Onsite"]
@@ -140,7 +165,7 @@ def _clean_detail(stage: str, detail: dict | None, events: list[StageEvent]) -> 
 
 def log_stage(session: Session, job_id: str, stage: str, *, on: str | None = None, time: str | None = None,
               detail: dict | None = None, note: str | None = None, applied_on: str | None = None,
-              reopen: bool = False, snapshot=None) -> StageEvent:
+              reopen: bool = False, snapshot=None, kind: str = "job") -> StageEvent:
     """Add one event, enforcing the rules. Caller commits.
 
     - triage stages only before applying ("new" = delete the triage events, see reset_triage)
@@ -150,9 +175,10 @@ def log_stage(session: Session, job_id: str, stage: str, *, on: str | None = Non
     - a closed application only takes new entries with reopen=True, which drops the outcome
     `snapshot(session, job_id)` records what I sent when the Applied event is created.
     """
-    if stage not in STAGES:
+    if stage not in STAGES or stage not in labels_for(kind):
         raise StageError(f"Unknown stage: {stage}")
     st = STAGES[stage]
+    name = label(stage, kind)
     on = _clean_date(on)
     events = events_for(session, job_id)
     has = {e.stage for e in events}
@@ -161,22 +187,22 @@ def log_stage(session: Session, job_id: str, stage: str, *, on: str | None = Non
 
     if st.group == "triage":
         if applied:
-            raise StageError("Already applied: use Withdrawn instead of skipping, or delete the Applied entry.")
+            raise StageError(f"Already {label('applied', kind).lower()}: use Withdrawn instead of skipping, or delete the {label('applied', kind)} entry.")
         for e in events:  # triage is a single choice: replace the previous one
             session.delete(e)
     else:
         if outcome and not reopen:
-            raise NeedsReopen(f"This application is closed ({STAGES[outcome.stage].label}). Reopen it to log this?")
+            raise NeedsReopen(f"This is closed ({label(outcome.stage, kind)}). Reopen it to log this?")
         if outcome:
             session.delete(outcome)
         if stage in ("applied", "offer") and stage in has:
-            raise StageError(f"There is already a {st.label} entry: edit that one instead.")
+            raise StageError(f"There is already a {name} entry: edit that one instead.")
         if st.needs_offer and "offer" not in has:
-            raise StageError("Log the Offer first.")
+            raise StageError(f"Log the {label('offer', kind)} first.")
         if not applied and stage != "applied":
             applied_on = _clean_date(applied_on or on, "Applied date")
             if applied_on > on:
-                raise StageError("The applied date can't be after this entry's date.")
+                raise StageError(f"The {label('applied', kind).lower()} date can't be after this entry's date.")
             _add(session, job_id, "applied", applied_on, snapshot=snapshot)
         for e in events:  # applying ends triage
             if group_of(e.stage) == "triage":
@@ -237,21 +263,21 @@ def reset_triage(session: Session, job_id: str) -> None:
 
 # --- reading the log -------------------------------------------------------
 
-def event_label(ev: StageEvent) -> str:
+def event_label(ev: StageEvent, kind: str = "job") -> str:
     d = detail_of(ev)
-    label = STAGES[ev.stage].label if ev.stage in STAGES else ev.stage
+    name = label(ev.stage, kind)
     if ev.stage == "interview" and d.get("round"):
-        label = f"Interview {d['round']}"
-    return label
+        name = f"{name} {d['round']}"
+    return name
 
 
-def event_dict(ev: StageEvent) -> dict:
+def event_dict(ev: StageEvent, kind: str = "job") -> dict:
     return {
-        "id": ev.id, "stage": ev.stage, "label": event_label(ev), "group": group_of(ev.stage),
+        "id": ev.id, "stage": ev.stage, "label": event_label(ev, kind), "group": group_of(ev.stage),
         "date": ev.date, "time": ev.time, "detail": detail_of(ev), "note": ev.note or "",
         "debrief": ev.debrief or "", "questions": ev.questions or "", "estimated": ev.estimated,
         "upcoming": ev.date > today(),
-        "needs_debrief": STAGES.get(ev.stage, STAGES["applied"]).scheduled and ev.date <= today()
+        "needs_debrief": is_scheduled(ev.stage, kind) and ev.date <= today()
                          and not (ev.debrief or ev.questions or detail_of(ev).get("rating")),
     }
 
@@ -266,7 +292,7 @@ def _days_since(iso: str) -> int:
     return (date.today() - date.fromisoformat(iso)).days
 
 
-def next_action(events: list[StageEvent]) -> dict | None:
+def next_action(events: list[StageEvent], kind: str = "job") -> dict | None:
     """What needs doing for an open application, most urgent first."""
     status = derive_status(events)
     if group_of(status) != "process":
@@ -274,24 +300,24 @@ def next_action(events: list[StageEvent]) -> dict | None:
     upcoming = [e for e in events if e.date > today()]
     if upcoming:
         e = upcoming[0]
-        return {"kind": "upcoming", "label": event_label(e), "date": e.date, "time": e.time}
+        return {"kind": "upcoming", "label": event_label(e, kind), "date": e.date, "time": e.time}
     for e in reversed(events):
         if e.stage == "assessment":
             d = detail_of(e)
             if d.get("due") and not d.get("submitted"):
                 return {"kind": "due", "label": "Assessment due", "date": d["due"]}
-    pending = [e for e in events if event_dict(e)["needs_debrief"]]
+    pending = [e for e in events if event_dict(e, kind)["needs_debrief"]]
     if pending:
         e = pending[-1]
-        return {"kind": "debrief", "label": f"How did {event_label(e)} go?", "date": e.date, "event_id": e.id}
+        return {"kind": "debrief", "label": f"How did {event_label(e, kind)} go?", "date": e.date, "event_id": e.id}
     last = events[-1]
     if _days_since(last.date) >= FOLLOW_UP_DAYS and status in ("applied", "assessment", "screening", "interview"):
         return {"kind": "follow_up", "label": "Follow up?", "date": last.date, "days": _days_since(last.date)}
     return None
 
 
-def summary(events: list[StageEvent]) -> dict:
-    """Everything the board needs about one job's application, as plain data."""
+def summary(events: list[StageEvent], kind: str = "job") -> dict:
+    """Everything the board needs about one job's application (or lab outreach), as plain data."""
     status = derive_status(events)
     applied = next((e for e in events if e.stage == "applied"), None)
     top = furthest(events)
@@ -301,13 +327,15 @@ def summary(events: list[StageEvent]) -> dict:
     current = outcome or (events[-1] if events else None)
     reached = STAGES[top.stage].rank if top else 0
     return {
+        "kind": kind,
         "status": status,
+        "status_label": label(status, kind),
         "group": group_of(status),
         "applied": bool(applied),
         "closed": bool(outcome),
-        "stage_label": (f"{STAGES[outcome.stage].label} after {event_label(top)}"
+        "stage_label": (f"{label(outcome.stage, kind)} after {event_label(top, kind)}"
                         if outcome and top and top.stage not in ("applied", "offer") else
-                        event_label(current) if current else "New"),
+                        event_label(current, kind) if current else label("new", kind)),
         "stage_date": current.date if current else None,
         "stage_estimated": bool(current and current.estimated),
         "applied_date": applied.date if applied else None,
@@ -315,11 +343,11 @@ def summary(events: list[StageEvent]) -> dict:
         "last_activity": last.date if last else None,
         "reached": reached,
         # done: it happened; passed: skipped on the way to a later stage
-        "stepper": [{"stage": s, "label": STAGES[s].label, "done": any(e.stage == s for e in events),
+        "stepper": [{"stage": s, "label": label(s, kind), "done": any(e.stage == s for e in events),
                      "passed": STAGES[s].rank <= reached,
                      "date": next((e.date for e in events if e.stage == s), None)} for s in STEPPER],
-        "next": next_action(events),
-        "events": [event_dict(e) for e in events],
+        "next": next_action(events, kind),
+        "events": [event_dict(e, kind) for e in events],
     }
 
 

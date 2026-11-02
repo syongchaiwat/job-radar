@@ -39,18 +39,35 @@ def job_detail(job_id: str, request: Request, session: Session = Depends(get_ses
 @router.post("/jobs/{job_id}/review")
 def review(job_id: str, session: Session = Depends(get_session), action: str = Form(...)):
     """Review bar (before applying): shortlist, skip, or back to the review queue."""
-    if session.get(Job, job_id) is None:
+    job = session.get(Job, job_id)
+    if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     try:
         if action == "reset":
             tracking_core.reset_triage(session, job_id)
         elif action in ("shortlist", "skipped"):
-            tracking_core.log_stage(session, job_id, action)
+            tracking_core.log_stage(session, job_id, action, kind=job.kind)
         else:
             raise HTTPException(status_code=400, detail="Unknown review action")
     except tracking_core.StageError as exc:
         session.rollback()
         raise HTTPException(status_code=400, detail=str(exc))
+    session.commit()
+    return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+
+
+@router.post("/jobs/{job_id}/lab")
+def save_lab(job_id: str, session: Session = Depends(get_session), company: str = Form(...), title: str = Form(...),
+             contact: str = Form(""), location: str = Form("")):
+    """Lab outreach entry: lab name, topic, professor and city (job page Lab panel)."""
+    job = session.get(Job, job_id)
+    if job is None or job.kind != "outreach":
+        raise HTTPException(status_code=404, detail="Lab entry not found")
+    job.company, job.title = company.strip() or job.company, title.strip() or job.title
+    job.location = location.strip() or None
+    tr = tracking_core.ensure_tracking(session, job_id)
+    tr.contact = contact.strip() or None
+    session.add_all([job, tr])
     session.commit()
     return RedirectResponse(f"/jobs/{job_id}", status_code=303)
 
@@ -71,6 +88,8 @@ def replace_description(job_id: str, session: Session = Depends(get_session), de
     job.description_breakdown = None  # cached breakdown was computed from the old text
     job.description_breakdown_computed_at = None
     session.commit()
+    if job.kind == "outreach":  # labs are never screened
+        return RedirectResponse(f"/jobs/{job_id}", status_code=303)
     error = enrich_and_match(session, job, force=True)  # the role card must follow the new text
     session.add(screen_job(job, archetype_text(session, job.id)))
     session.add(job)

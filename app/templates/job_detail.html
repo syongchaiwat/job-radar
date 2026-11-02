@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ job.company }} — {{ job.title }} · job-radar{% endblock %}
 {% block content %}
-<a href="/" class="text-sm text-gray-400 hover:text-gray-100">← Back to board</a>
+{% set lab = job.kind == 'outreach' %}
+<a href="/{{ '?view=labs' if lab else '' }}" class="text-sm text-gray-400 hover:text-gray-100">← Back to {{ 'labs' if lab else 'board' }}</a>
 
 <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between mt-4 mb-1 gap-3">
   <div>
-    <p class="text-xs uppercase tracking-wide text-accent">{{ job.company }}</p>
+    <p class="text-xs uppercase tracking-wide text-accent">{% if lab %}Lab outreach · {% endif %}{{ job.company }}</p>
     <h1 class="text-3xl font-bold">{{ job.title }}</h1>
   </div>
   {% if screening and screening.match_level %}
@@ -14,12 +15,23 @@
   </span>
   {% endif %}
 </div>
-<p class="text-gray-400 text-sm mb-1">{{ job | subtitle_line }}</p>
+{% if not lab %}<p class="text-gray-400 text-sm mb-1">{{ job | subtitle_line }}</p>{% elif tracking and tracking.contact %}<p class="text-gray-400 text-sm mb-1">{{ tracking.contact }}{% if job.location %} · {{ job.location }}{% endif %}</p>{% endif %}
 <p class="text-sm mb-4 flex flex-wrap items-center gap-2 min-w-0">
-  <a href="{{ job.url }}" target="_blank" rel="noopener" class="border border-gray-700 rounded px-3 py-1 hover:border-gray-500 whitespace-nowrap">Open posting ↗</a>
+  <a href="{{ job.url }}" target="_blank" rel="noopener" class="border border-gray-700 rounded px-3 py-1 hover:border-gray-500 whitespace-nowrap">{{ 'Open lab page ↗' if lab else 'Open posting ↗' }}</a>
   <span class="text-xs text-gray-500 break-all">{{ job.url }}</span>
 </p>
 
+{% if lab %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-2 space-y-6">
+    {% include "partials/_cvlib_panel.html" %}
+  </div>
+  <div class="space-y-4">
+    {% include "partials/_application_panel.html" %}
+    {% include "partials/_lab_panel.html" %}
+  </div>
+</div>
+{% else %}
 {% if not application.applied %}{% include "partials/_review_bar.html" %}{% endif %}
 {% include "partials/_role_card.html" %}
 
@@ -52,17 +64,18 @@
   {% include "partials/_gaps.html" %}
 </div>
 {% endif %}
+{% endif %}
 
 <div class="mt-6 border border-gray-800 rounded-lg p-4">
   <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">Full description</p>
   <pre class="text-sm text-gray-400 whitespace-pre-wrap font-sans">{{ job.description or "(no description)" }}</pre>
   <details class="mt-4 border-t border-gray-800 pt-3">
-    <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300">Wrong description? Replace it and re-screen</summary>
+    <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300">{{ 'Wrong page text? Replace it' if lab else 'Wrong description? Replace it and re-screen' }}</summary>
     <form method="post" action="/jobs/{{ job.id }}/description" x-data="{ working: false }" @submit="working = true" class="mt-2 space-y-2">
       <textarea name="description" rows="10" required placeholder="Paste the real job description"
                 class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm"></textarea>
       <button type="submit" :disabled="working" class="border border-gray-700 rounded px-4 py-1.5 text-sm hover:border-gray-500 disabled:opacity-50">
-        <span x-show="!working">Replace &amp; re-screen</span><span x-show="working" x-cloak class="animate-pulse">Re-screening… (~10–20s)</span>
+        <span x-show="!working">{{ 'Replace' if lab else 'Replace &amp; re-screen' | safe }}</span><span x-show="working" x-cloak class="animate-pulse">Re-screening… (~10–20s)</span>
       </button>
       <p class="text-xs text-gray-500">Missing title/company get re-extracted from the new text. Your labels, tracking and CVs are kept.</p>
     </form>

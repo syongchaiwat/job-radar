@@ -72,6 +72,14 @@ class ExtractedJobPosting(BaseModel):
     )
 
 
+class ExtractedLabPage(BaseModel):
+    lab: str = Field(description="The lab or research group's name, with its institution if stated. Empty string if not determinable.")
+    professor: str = Field(description="Head of the lab (name only). Empty string if not stated.")
+    research_area: str = Field(description="What the lab works on, 3-8 words. Empty string if not determinable.")
+    location: str = Field(description="City if stated, else empty string.")
+    description: str = Field(description="The lab's real content (research, projects, open thesis projects, how to apply), page chrome removed, close to verbatim.")
+
+
 class JobBlurb(BaseModel):
     blurb: str = Field(
         description="One punchy sentence (~12-25 words) summarizing what this job actually is, for a card view."

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}New CV · job-radar{% endblock %}
+{% block content %}
+<a href="/cvs" class="text-sm text-gray-400 hover:text-gray-100">← CV library</a>
+<div class="mt-3 mb-5">
+  <p class="text-xs uppercase tracking-wide text-accent">Own CV</p>
+  <h1 class="text-3xl font-bold">New CV</h1>
+  <p class="text-sm text-gray-400 mt-1">A CV outside the job themes, e.g. one per research direction for asking university labs about thesis topics.</p>
+</div>
+
+<form method="post" action="/cvs/custom" x-data="{ method: 'ai', kind: 'thesis' }" class="border border-gray-800 bg-gray-900/50 rounded-xl p-5 space-y-5 max-w-3xl">
+  <label class="block space-y-1">
+    <span class="text-xs uppercase tracking-wide text-gray-500">Name</span>
+    <input name="name" required placeholder="e.g. Thesis: biomedical ML" class="w-full bg-gray-950 border border-gray-800 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-accent-dim">
+  </label>
+
+  <div class="space-y-1">
+    <span class="text-xs uppercase tracking-wide text-gray-500">Type</span>
+    <div class="flex flex-wrap gap-2">
+      {% for key, label in kinds.items() %}
+      <label class="flex items-center gap-2 border rounded-md px-3 py-1.5 text-sm cursor-pointer" :class="kind === '{{ key }}' ? 'border-accent text-gray-100' : 'border-gray-800 text-gray-400'">
+        <input type="radio" name="kind" value="{{ key }}" x-model="kind" class="accent-indigo-400"> {{ label }}
+      </label>
+      {% endfor %}
+    </div>
+    <p class="text-xs text-gray-500" x-show="kind === 'thesis'">Always lists relevant coursework, leads with the Master's Project, and adds the thesis lane line to the summary in the PDF.</p>
+    <p class="text-xs text-gray-500" x-show="kind === 'general'" x-cloak>Same rules as job CVs (coursework only when it fills a gap).</p>
+  </div>
+
+  <div class="space-y-1">
+    <span class="text-xs uppercase tracking-wide text-gray-500">How</span>
+    <div class="flex flex-wrap gap-2">
+      <label class="flex items-center gap-2 border rounded-md px-3 py-1.5 text-sm cursor-pointer" :class="method === 'ai' ? 'border-accent text-gray-100' : 'border-gray-800 text-gray-400'">
+        <input type="radio" name="method" value="ai" x-model="method" class="accent-indigo-400"> Draft with AI from a brief
+      </label>
+      <label class="flex items-center gap-2 border rounded-md px-3 py-1.5 text-sm cursor-pointer" :class="method === 'paste' ? 'border-accent text-gray-100' : 'border-gray-800 text-gray-400'">
+        <input type="radio" name="method" value="paste" x-model="method" class="accent-indigo-400"> Write or paste it myself
+      </label>
+    </div>
+  </div>
+
+  <label class="block space-y-1">
+    <span class="text-xs uppercase tracking-wide text-gray-500">Brief <span x-show="method === 'paste'" class="normal-case tracking-normal text-gray-600">(optional: kept as a note, used if you regenerate with AI later)</span></span>
+    <textarea name="brief" rows="7" :required="method === 'ai'" placeholder="Who it's for and what to emphasise, e.g. &quot;Labs working on machine learning for healthcare. Emphasise the master's project, deep learning, and careful evaluation.&quot;"
+              class="w-full bg-gray-950 border border-gray-800 rounded-md px-3 py-2 text-sm leading-relaxed focus:outline-none focus:border-accent-dim"></textarea>
+    <p x-show="method === 'ai'" class="text-xs text-gray-500">Drafted from your profile only (projects, coursework, CV template), then critiqued and revised: Sonnet drafts, Opus critiques, about 2-3 minutes. Nothing outside your profile gets claimed.</p>
+  </label>
+
+{% if labs %}
+  <div class="space-y-1" x-show="method === 'ai'">
+    <span class="text-xs uppercase tracking-wide text-gray-500">Context <span class="normal-case tracking-normal text-gray-600">(optional: these labs' pages are added to the brief)</span></span>
+    <div class="max-h-48 overflow-y-auto border border-gray-800 rounded-md divide-y divide-gray-800">
+      {% for l in labs %}
+      <label class="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-800/40">
+        <input type="checkbox" name="context_job_ids" value="{{ l.id }}"  class="accent-indigo-400">
+        <span class="text-gray-200">{{ l.company }}</span><span class="text-gray-500 truncate">· {{ l.title }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  <label x-show="method === 'paste'" x-cloak class="block space-y-1">
+    <span class="text-xs uppercase tracking-wide text-gray-500">CV (Markdown)</span>
+    <textarea name="markdown" rows="20" placeholder="Paste a CV in Markdown, or leave empty to start from a blank page."
+              class="w-full bg-gray-950 border border-gray-800 rounded-md px-3 py-2 text-sm font-mono leading-relaxed focus:outline-none focus:border-accent-dim"></textarea>
+    <p class="text-xs text-gray-500">Use the same shape as library CVs (# Name, ## Summary, ## Education …) so the PDF renders the same way.</p>
+  </label>
+
+  <button class="border border-accent text-accent rounded-md px-4 py-1.5 text-sm hover:bg-accent/10" x-text="method === 'ai' ? 'Create and draft' : 'Create'"></button>
+</form>
+{% endblock %}

@@ -11,7 +11,7 @@ from app.deps import get_session
 from app.services.jobs import active_archetypes, job_archetypes
 from app.templating import templates
 from src.lanes.core import load_lanes
-from src.tracking.stats import application_stats, question_bank
+from src.tracking.stats import application_stats, outreach_stats, question_bank
 from src.db import Archetype, MarketSuggestion, MarketTodo, ProfileTerm
 from src.market.stats import market_overview
 from src.profile import context as pc
@@ -48,6 +48,7 @@ def market_page(request: Request, a: str | None = None, session: Session = Depen
                  "days_to_graduation": (GRADUATION - date.today()).days,
                  "days_to_permit_deadline": (PERMIT_DEADLINE - date.today()).days,
                  "app_stats": application_stats(session, _archetype_names(session)),
+                 "outreach": outreach_stats(session),
                  "questions": question_bank(session),
                  "lane_names": {l.key: l.name for l in load_lanes()} | {"none": "No lane"}},
     )

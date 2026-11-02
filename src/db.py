@@ -36,6 +36,7 @@ class Job(SQLModel, table=True):
     cv_version_id: Optional[int] = None  # CV library choice for this job; None = latest CV of its archetype
     market_data: bool = False  # user switch: this posting shapes archetypes and market stats (independent of application status)
     bookmarked: bool = False  # user marker to spot a job on the board
+    kind: str = "job"  # job (a posting) | outreach (a university lab I contact about a thesis: no screening, archetypes or market)
 
 
 class GroundTruth(SQLModel, table=True):
@@ -255,13 +256,28 @@ class MarketTodo(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
-class CVVersion(SQLModel, table=True):
-    """CV library: one CV per archetype (versioned), built from the archetype's
-    market brief and reused across its jobs. Hashes drive the 'outdated' badge."""
+class CustomCV(SQLModel, table=True):
+    """A CV I add to the library myself (e.g. for thesis outreach to university labs),
+    outside the archetypes. Its versions are CVVersion rows with custom_cv_id set."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    archetype_id: int = Field(foreign_key="archetype.id", index=True)
-    archetype_slug: str = Field(index=True)
+    name: str
+    kind: str = "thesis"  # thesis (always lists relevant coursework, research angle) | general (job CV rules)
+    brief: str = ""  # what the AI draft writes against: what to emphasise, who it's for
+    context_job_ids: str = "[]"  # JSON list[str]: entries whose fetched pages are added to the brief
+    archived: bool = False
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class CVVersion(SQLModel, table=True):
+    """CV library: one CV per archetype (versioned), built from the archetype's
+    market brief and reused across its jobs, or a version of one of my own CVs
+    (custom_cv_id set, archetype_id None). Hashes drive the 'outdated' badge."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    archetype_id: Optional[int] = Field(default=None, foreign_key="archetype.id", index=True)
+    custom_cv_id: Optional[int] = Field(default=None, foreign_key="customcv.id", index=True)
+    archetype_slug: str = Field(index=True)  # group key: the archetype's slug, or "custom-<id>"
     draft_markdown: str
     attempt_count: int = 0
     verdict: str = "revise"
@@ -339,6 +355,7 @@ _ADDED_COLUMNS = {
         "lane": "VARCHAR",
         "lane_source": "VARCHAR",
         "deadline": "VARCHAR",
+        "kind": "VARCHAR NOT NULL DEFAULT 'job'",
     },
     "tracking": {
         "channel": "VARCHAR",
@@ -369,10 +386,29 @@ def _migrate(engine) -> None:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
 
 
+def _rebuild_cvversion(engine) -> None:
+    """One-time: cvversion.archetype_id became nullable (own CVs have no archetype).
+    SQLite can't relax NOT NULL in place, so rebuild the table and copy the rows."""
+    from sqlalchemy import inspect, text
+
+    cols = {c["name"]: c for c in inspect(engine).get_columns("cvversion")} if inspect(engine).has_table("cvversion") else {}
+    if not cols or cols["archetype_id"]["nullable"]:
+        return
+    names = ", ".join(cols)
+    with engine.begin() as conn:
+        for idx in inspect(engine).get_indexes("cvversion"):
+            conn.execute(text(f"DROP INDEX IF EXISTS {idx['name']}"))
+        conn.execute(text("ALTER TABLE cvversion RENAME TO cvversion_old"))
+        CVVersion.__table__.create(conn)
+        conn.execute(text(f"INSERT INTO cvversion ({names}) SELECT {names} FROM cvversion_old"))
+        conn.execute(text("DROP TABLE cvversion_old"))
+
+
 def init_db(engine=None):
     engine = engine or get_engine()
     SQLModel.metadata.create_all(engine)
     _migrate(engine)
+    _rebuild_cvversion(engine)
     return engine
 
 

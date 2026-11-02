@@ -6,6 +6,7 @@
 - cv_for_job() / apply_lane_slot(): which library CV a job uses, plus its lane sentence
 - job_cv() / save_job_cv() / reset_job_cv() / restore_job_cv(): a copy edited for one job (never touches the library)
 - effective_cv(): what a job actually sends (its edited copy, else the library CV + lane sentence)
+- create_custom() / generate_custom(): my own CVs (e.g. thesis outreach), hand-written or drafted from a brief
 """
 import hashlib
 import json
@@ -17,7 +18,7 @@ from pathlib import Path
 from sqlmodel import Session, select
 
 from src.cv.graph import build_cv_graph
-from src.db import Archetype, ArchetypeSet, CVVersion, Job, JobArchetype, JobCV, RoleCard
+from src.db import Archetype, ArchetypeSet, CustomCV, CVVersion, Job, JobArchetype, JobCV, RoleCard
 from src.market.stats import market_overview
 from src.profile import context as pc
 from src.llm.schemas import CVDraftState
@@ -118,10 +119,11 @@ TARGET_NOTE = (
 )
 
 
-def _next_file(archetype: Archetype, cv: CVVersion, session: Session) -> str:
+def _next_file(slug: str, cv: CVVersion, session: Session) -> str:
     CV_DRAFTS_DIR.mkdir(parents=True, exist_ok=True)
-    n = len(session.exec(select(CVVersion).where(CVVersion.archetype_slug == archetype.slug)).all()) + 1
-    path = CV_DRAFTS_DIR / f"archetype-{archetype.slug}_v{n}.md"
+    n = len(session.exec(select(CVVersion).where(CVVersion.archetype_slug == slug)).all()) + 1
+    name = slug if slug.startswith("custom-") else f"archetype-{slug}"
+    path = CV_DRAFTS_DIR / f"{name}_v{n}.md"
     path.write_text(cv.draft_markdown)
     return str(path.relative_to(REPO_ROOT))
 
@@ -156,7 +158,7 @@ def generate(session: Session, archetype_id: int, seed: CVVersion | None = None)
         tokens=sum(log.input_tokens + log.output_tokens for log in final.node_logs),
         latency_ms=sum(log.latency_ms for log in final.node_logs),
     )
-    cv.file_path = _next_file(archetype, cv, session)
+    cv.file_path = _next_file(archetype.slug, cv, session)
     session.add(cv)
     session.commit()
     session.refresh(cv)
@@ -164,14 +166,13 @@ def generate(session: Session, archetype_id: int, seed: CVVersion | None = None)
 
 
 def save_edit(session: Session, base: CVVersion, markdown: str) -> CVVersion:
-    archetype = session.get(Archetype, base.archetype_id)
     cv = CVVersion(**{k: getattr(base, k) for k in (
-        "archetype_id", "archetype_slug", "attempt_count", "verdict", "relevance_score", "honesty_score",
+        "archetype_id", "custom_cv_id", "archetype_slug", "attempt_count", "verdict", "relevance_score", "honesty_score",
         "impact_score", "clarity_score", "keyword_alignment_score", "overall_feedback", "unresolved_gaps",
         "source_job_ids", "market_hash", "profile_hash")})
     cv.draft_markdown, cv.model_used, cv.tokens, cv.latency_ms = markdown, MANUAL_EDIT, 0, 0
     cv.created_at = datetime.now(timezone.utc)
-    cv.file_path = _next_file(archetype, cv, session)
+    cv.file_path = _next_file(base.archetype_slug, cv, session)
     session.add(cv)
     session.commit()
     session.refresh(cv)
@@ -211,11 +212,14 @@ def primary_archetype(session: Session, job_id: str) -> Archetype | None:
 
 
 def cv_for_job(session: Session, job: Job) -> CVVersion | None:
-    """The job's chosen CV, else the latest CV of its archetype (matched by slug, so it survives set versions)."""
+    """The job's chosen CV, else the latest CV of its archetype (matched by slug, so it survives set versions).
+    A lab outreach entry falls back to the latest version of my newest Thesis CV."""
     if job.cv_version_id:
         cv = session.get(CVVersion, job.cv_version_id)
         if cv:
             return cv
+    if job.kind == "outreach":
+        return default_thesis_cv(session)
     a = primary_archetype(session, job.id)
     if a is None:
         return None
@@ -309,3 +313,134 @@ def effective_cv(session: Session, job: Job) -> tuple[str, str] | None:
         return edited.markdown, f"job:{edited.id}"
     cv, md = library_markdown(session, job)
     return (md, f"library:{cv.id}") if cv else None
+
+
+# --- My own CVs (outside the archetypes) -------------------------------------------------
+
+CUSTOM_KINDS = {"thesis": "Thesis / academic", "general": "General"}
+
+THESIS_NOTE = (
+    "**Note:** the 'posting' below is a BRIEF for a master's thesis CV, not a job posting. The CV goes to university "
+    "research labs to ask about available thesis topics, and is reused for several labs in the same research direction. "
+    "Write an academic-leaning CV: keep Education first and make the Master's Project prominent under the MSc (from its "
+    "study entries). ALWAYS include a \"Relevant coursework:\" line under the MSc with 3-6 courses chosen for the brief's "
+    "research area: this overrides step 2b. Keep the work experience, but phrase it for research value (methods, rigour, "
+    "experiments, evaluation, results) rather than business impact. The summary leads with the research interests and "
+    "methods the brief cares about, then the experience. There is no company: never name a lab, professor or role."
+)
+GENERAL_NOTE = (
+    "**Note:** the 'posting' below is a BRIEF written by the candidate, not a job posting: it says what this CV is for "
+    "and what to emphasise. Write the CV for that purpose with the usual rules. Never name a company, lab or role "
+    "unless the brief explicitly asks for it."
+)
+
+
+def default_thesis_cv(session: Session) -> CVVersion | None:
+    """What a lab outreach entry uses unless I pick another: the latest version of my newest Thesis CV."""
+    for custom in customs(session):
+        if custom.kind == "thesis":
+            vs = versions(session, custom_slug(custom))
+            if vs:
+                return vs[-1]
+    return None
+
+
+def custom_slug(custom: CustomCV) -> str:
+    return f"custom-{custom.id}"
+
+
+def customs(session: Session, include_archived: bool = False) -> list[CustomCV]:
+    q = select(CustomCV).order_by(CustomCV.id.desc())
+    if not include_archived:
+        q = q.where(CustomCV.archived == False)  # noqa: E712
+    return session.exec(q).all()
+
+
+def custom_brief(session: Session, custom: CustomCV) -> str:
+    """The brief plus the fetched pages of the entries picked as context."""
+    parts = [f"BRIEF: {custom.name}\n\n{custom.brief.strip() or '(no brief: write a strong general CV of this kind)'}"]
+    for jid in json.loads(custom.context_job_ids or "[]"):
+        job = session.get(Job, jid)
+        if job and job.description:
+            parts.append(f"CONTEXT: {job.company} · {job.title}\n{job.description[:3000]}")
+    return "\n\n---\n\n".join(parts)
+
+
+def custom_framing(custom: CustomCV) -> str:
+    angle = ("Research-oriented: lead with the Master's Project and the work that shows research ability for the brief's area."
+             if custom.kind == "thesis" else "Use the brief to decide what to lead with.")
+    return (f"# Framing: {custom.name}\n\n{angle}\n\nThere is no market data for this CV. Anything the brief asks for "
+            "that no source supports must not be claimed: it belongs in unresolved_gaps.")
+
+
+def custom_lane_slot(custom: CustomCV | None) -> str:
+    """Thesis CVs carry the academic-thesis lane sentence, as an outreach entry would add it."""
+    from src.lanes.core import OUTREACH_LANE, lane_by_key
+
+    lane = lane_by_key(OUTREACH_LANE) if custom and custom.kind == "thesis" else None
+    return lane.slot if lane else ""
+
+
+def create_custom(session: Session, name: str, kind: str, brief: str = "", context_job_ids: list[str] | None = None,
+                  markdown: str | None = None) -> CustomCV:
+    """A new CV of my own. With markdown it starts as a hand-written v1; otherwise it waits for generate_custom()."""
+    custom = CustomCV(name=name.strip() or "Untitled CV", kind=kind if kind in CUSTOM_KINDS else "thesis",
+                      brief=brief.strip(), context_job_ids=json.dumps(context_job_ids or []))
+    session.add(custom)
+    session.commit()
+    session.refresh(custom)
+    if markdown and markdown.strip():
+        cv = CVVersion(custom_cv_id=custom.id, archetype_slug=custom_slug(custom), verdict="hand-written",
+                       draft_markdown=markdown.replace("\r\n", "\n").strip() + "\n", model_used=MANUAL_EDIT, tokens=0, latency_ms=0)
+        cv.file_path = _next_file(cv.archetype_slug, cv, session)
+        session.add(cv)
+        session.commit()
+    return custom
+
+
+def generate_custom(session: Session, custom_id: int, seed: CVVersion | None = None) -> CVVersion:
+    """Draft -> critique loop against the CV's brief (all CV guardrails apply)."""
+    custom = session.get(CustomCV, custom_id)
+    if custom is None:
+        raise ValueError("Unknown CV")
+    slug = custom_slug(custom)
+    state = CVDraftState(
+        job_id=slug, job_title=custom.name, job_company="", job_location="Switzerland",
+        job_level="master's thesis" if custom.kind == "thesis" else None,
+        job_description=custom_brief(session, custom), archetype_slug=slug, framing=custom_framing(custom),
+        target_note=THESIS_NOTE if custom.kind == "thesis" else GENERAL_NOTE,
+        seed_draft=seed.draft_markdown if seed else None,
+        seed_notes=(f"Previous version's feedback: {seed.overall_feedback}" if seed and seed.overall_feedback else None),
+    )
+    final = CVDraftState.model_validate(GRAPH.invoke(state.model_dump()))
+    cv = CVVersion(
+        custom_cv_id=custom.id, archetype_slug=slug,
+        draft_markdown=_strip_template_metadata(final.draft_markdown or ""),
+        attempt_count=final.attempt_count, verdict=final.verdict or "revise",
+        relevance_score=final.relevance_score, honesty_score=final.honesty_score, impact_score=final.impact_score,
+        clarity_score=final.clarity_score, keyword_alignment_score=final.keyword_alignment_score,
+        overall_feedback=final.overall_feedback, unresolved_gaps=json.dumps(final.unresolved_gaps),
+        source_job_ids=custom.context_job_ids, profile_hash=profile_hash(),
+        model_used=",".join(sorted({log.model for log in final.node_logs})) or None,
+        tokens=sum(log.input_tokens + log.output_tokens for log in final.node_logs),
+        latency_ms=sum(log.latency_ms for log in final.node_logs),
+    )
+    cv.file_path = _next_file(slug, cv, session)
+    session.add(cv)
+    session.commit()
+    session.refresh(cv)
+    return cv
+
+
+def custom_status(cv: CVVersion | None) -> dict:
+    """AI-drafted lineage goes stale when the profile changes; hand-written CVs never do."""
+    if cv is None or not cv.profile_hash or cv.profile_hash == profile_hash():
+        return {"outdated": False, "reasons": []}
+    return {"outdated": True, "reasons": ["your profile changed (projects, coursework or CV template)"]}
+
+
+def cv_names(session: Session) -> dict[str, str]:
+    """Group key (archetype slug or custom-<id>) -> display name, for pickers and labels."""
+    names = {a.slug: a.name for a in session.exec(select(Archetype)).all()}
+    names.update({custom_slug(c): c.name for c in customs(session, include_archived=True)})
+    return names

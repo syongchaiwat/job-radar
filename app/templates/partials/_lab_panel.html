@@ -1,0 +1,33 @@
+{# Job page, lab outreach entry: lab details (name, topic, professor, location) and, before sending, Skip / back to To contact. #}
+<div class="border border-gray-800 rounded-xl p-4 space-y-3 text-sm" x-data="{ editing: false }">
+  <div class="flex items-center gap-2">
+    <p class="text-xs uppercase tracking-wide text-gray-500">Lab</p>
+    <button type="button" @click="editing = !editing" class="ml-auto text-xs text-gray-500 hover:text-gray-200" x-text="editing ? 'Cancel' : 'Edit'"></button>
+  </div>
+  <dl x-show="!editing" class="space-y-1.5">
+    <div class="flex gap-2"><dt class="text-gray-500 w-20 shrink-0">Lab</dt><dd class="text-gray-200">{{ job.company }}</dd></div>
+    <div class="flex gap-2"><dt class="text-gray-500 w-20 shrink-0">Topic</dt><dd class="text-gray-200">{{ job.title }}</dd></div>
+    <div class="flex gap-2"><dt class="text-gray-500 w-20 shrink-0">Professor</dt><dd class="text-gray-200">{{ tracking.contact if tracking and tracking.contact else '–' }}</dd></div>
+    {% if job.location %}<div class="flex gap-2"><dt class="text-gray-500 w-20 shrink-0">Location</dt><dd class="text-gray-200">{{ job.location }}</dd></div>{% endif %}
+  </dl>
+  <form x-show="editing" x-cloak method="post" action="/jobs/{{ job.id }}/lab" class="space-y-2">
+    <input name="company" value="{{ job.company }}" required placeholder="Lab or group, institution" class="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-1.5">
+    <input name="title" value="{{ job.title }}" required placeholder="Thesis: research area" class="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-1.5">
+    <input name="contact" value="{{ tracking.contact if tracking and tracking.contact else '' }}" placeholder="Professor / contact person" class="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-1.5">
+    <input name="location" value="{{ job.location or '' }}" placeholder="City" class="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-1.5">
+    <button class="border border-gray-700 rounded-md px-4 py-1.5 hover:border-gray-500">Save</button>
+  </form>
+  {% if not application.applied %}
+  <div class="flex flex-wrap items-center gap-2 border-t border-gray-800 pt-3">
+    {% if application.status == 'skipped' %}
+    <span class="text-gray-400">Skipped.</span>
+    <form method="post" action="/jobs/{{ job.id }}/review"><input type="hidden" name="action" value="reset">
+      <button class="border border-gray-700 rounded-md px-3 py-1 hover:border-gray-500">Back to To contact</button></form>
+    {% else %}
+    <span class="text-gray-400">Not contacted yet.</span>
+    <form method="post" action="/jobs/{{ job.id }}/review" class="ml-auto"><input type="hidden" name="action" value="skipped">
+      <button class="border border-gray-700 rounded-md px-3 py-1 text-gray-400 hover:border-gray-500 hover:text-gray-200" title="Decide against contacting this lab">Skip</button></form>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>

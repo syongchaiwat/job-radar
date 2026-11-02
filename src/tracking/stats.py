@@ -1,5 +1,6 @@
 """Application analytics from the stage log: funnel, response rate, time to first response,
-and the same numbers broken down by lane, archetype, source and which CV I sent."""
+and the same numbers broken down by lane, archetype, source and which CV I sent.
+Lab outreach entries are kept out of these and get their own small summary (outreach_stats)."""
 from statistics import median
 
 from sqlmodel import Session, select
@@ -32,7 +33,7 @@ def _row(apps: list[dict]) -> dict:
 def application_stats(session: Session, archetype_of: dict[str, str] | None = None) -> dict:
     """archetype_of maps job id -> archetype name (from the dashboard's active set)."""
     events = core.all_events(session)
-    jobs = {j.id: j for j in session.exec(select(Job)).all()}
+    jobs = {j.id: j for j in session.exec(select(Job).where(Job.kind == "job")).all()}
     trackings = {t.job_id: t for t in session.exec(select(Tracking)).all()}
     apps = []
     for job_id, evs in events.items():
@@ -66,7 +67,9 @@ def application_stats(session: Session, archetype_of: dict[str, str] | None = No
         return sorted(({"key": k, **_row(v)} for k, v in groups.items()), key=lambda r: -r["n"])
 
     outcomes: dict[str, int] = {}
-    for evs in events.values():
+    for job_id, evs in events.items():
+        if job_id not in jobs:
+            continue
         st = core.derive_status(evs)
         if core.group_of(st) == "outcome":
             outcomes[st] = outcomes.get(st, 0) + 1
@@ -83,6 +86,25 @@ def application_stats(session: Session, archetype_of: dict[str, str] | None = No
     }
 
 
+def outreach_stats(session: Session) -> dict:
+    """Lab outreach: to contact, sent, replied, meetings, topics offered, days to reply."""
+    labs = [j.id for j in session.exec(select(Job).where(Job.kind == "outreach")).all()]
+    events = core.all_events(session)
+    sent = [events[j] for j in labs if any(e.stage == "applied" for e in events.get(j, []))]
+    rank = lambda evs: core.STAGES[core.furthest(evs).stage].rank  # noqa: E731
+    waits = [d for d in (core.first_response_days(evs) for evs in sent) if d is not None]
+    return {
+        "n": len(labs),
+        "to_contact": sum(1 for j in labs if not events.get(j)),
+        "sent": len(sent),
+        "replied": sum(1 for evs in sent if _responded(evs)),
+        "meetings": sum(1 for evs in sent if rank(evs) >= 4),
+        "topics": sum(1 for evs in sent if rank(evs) >= 5),
+        "agreed": sum(1 for evs in sent if core.derive_status(evs) == "accepted"),
+        "median_days_to_reply": median(waits) if waits else None,
+    }
+
+
 def question_bank(session: Session) -> list[dict]:
     """Every interview / screening question I logged, newest first, with where it was asked."""
     jobs = {j.id: j for j in session.exec(select(Job)).all()}
@@ -96,6 +118,6 @@ def question_bank(session: Session) -> list[dict]:
             for q in (line.strip(" -•\t") for line in e.questions.splitlines()):
                 if q:
                     out.append({"question": q, "job_id": job_id, "company": job.company if job else "",
-                                "title": job.title if job else "", "stage": core.event_label(e),
+                                "title": job.title if job else "", "stage": core.event_label(e, job.kind if job else "job"),
                                 "kind": d.get("kind", ""), "date": e.date})
     return sorted(out, key=lambda q: q["date"], reverse=True)

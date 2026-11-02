@@ -50,7 +50,7 @@ def main():
             if jobs[0] is None:
                 sys.exit(f"No job {args.job_id}")
         else:
-            jobs = [j for j in session.exec(select(Job).order_by(Job.first_seen.desc())).all() if _needs_work(session, j)]
+            jobs = [j for j in session.exec(select(Job).where(Job.kind == "job").order_by(Job.first_seen.desc())).all() if _needs_work(session, j)]
         if args.limit:
             jobs = jobs[: args.limit]
         print(f"{len(jobs)} job(s) to enrich")

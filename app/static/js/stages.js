@@ -9,6 +9,13 @@ const STAGE_GROUPS = [
 ];
 const SCHEDULED = ["screening", "interview"];
 const TRIAGE = ["shortlist", "skipped"];
+// Lab outreach entries: same log, their own names (Sent, Replied, Meeting, Topic offered...).
+const OUTREACH_GROUPS = [
+  ["Before sending", ["skipped"]],
+  ["Outreach", ["applied", "screening", "interview", "offer"]],
+  ["Outcome", ["rejected", "no_response", "withdrawn", "declined", "accepted"]],
+];
+const OUTREACH_SCHEDULED = ["interview"];
 
 function isoDay(offset = 0) {
   const d = new Date();
@@ -16,16 +23,20 @@ function isoDay(offset = 0) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function stageModal(labels) {
+function stageModal(jobLabels, outreachLabels) {
   return {
     open: false, saving: false, error: "", reopen: false,
-    labels, groups: STAGE_GROUPS,
+    jobLabels, outreachLabels, kind: "job",
+    get outreach() { return this.kind === "outreach"; },
+    get labels() { return this.outreach ? this.outreachLabels : this.jobLabels; },
+    get groups() { return this.outreach ? OUTREACH_GROUPS : STAGE_GROUPS; },
     jobId: null, company: "", title: "", eventId: null,
     app: { applied: false, closed: false, status: "new", events: [] },
     f: {},
     show(detail) {
       this.jobId = detail.jobId; this.company = detail.company || ""; this.title = detail.title || "";
       this.app = detail.app || { applied: false, closed: false, status: "new", events: [] };
+      this.kind = this.app.kind || "job";
       const ev = detail.event;
       this.eventId = ev ? ev.id : null;
       const d = (ev && ev.detail) || {};
@@ -42,6 +53,13 @@ function stageModal(labels) {
     // Most likely next steps first, from where the application stands.
     suggested() {
       const a = this.app;
+      if (this.outreach) {
+        if (!a.applied) return ["applied", "skipped"];
+        if (a.closed) return ["screening", "interview", "offer"];
+        if (a.status === "offer") return ["accepted", "declined", "withdrawn"];
+        if (a.reached >= 2) return ["interview", "offer", "rejected", "no_response", "withdrawn"];
+        return ["screening", "rejected", "no_response", "withdrawn"];
+      }
       if (!a.applied) return ["applied", "shortlist", "skipped"];
       if (a.closed) return ["interview", "screening", "assessment", "offer"];
       if (a.status === "offer") return ["accepted", "declined", "withdrawn"];
@@ -52,7 +70,7 @@ function stageModal(labels) {
     get editing() { return this.eventId !== null; },
     get stage() { return this.f.stage; },
     needsApplied() { return !this.editing && !this.app.applied && !TRIAGE.includes(this.stage) && this.stage !== "applied"; },
-    hasTime() { return SCHEDULED.includes(this.stage); },
+    hasTime() { return (this.outreach ? OUTREACH_SCHEDULED : SCHEDULED).includes(this.stage); },
     isPast() { return this.f.date && this.f.date <= isoDay(); },
     heading() {
       if (this.editing) return "Edit " + (this.labels[this.stage] || this.stage);
@@ -77,7 +95,7 @@ function stageModal(labels) {
     },
     async remove() {
       const msg = this.stage === "applied"
-        ? "Delete the Applied entry? This removes the whole application (every stage after it)."
+        ? `Delete the ${this.labels.applied} entry? This removes everything logged after it.`
         : "Delete this entry?";
       if (!confirm(msg)) return;
       const res = await fetch(`/jobs/${this.jobId}/stages/${this.eventId}/delete`, { method: "POST" });

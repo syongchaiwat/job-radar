@@ -1,0 +1,31 @@
+{# Board card for a lab outreach entry (Labs section): lab, topic, professor, outreach stage, CV it uses. #}
+{% set jid = row.job.id %}
+<a href="/jobs/{{ jid }}" x-show="isVisible('{{ jid }}')" :style="{ order: orderOf('{{ jid }}') }"
+   class="relative block border rounded-xl p-4 hover:border-gray-600 transition-colors bg-gray-900/60"
+   :class="[job('{{ jid }}').status === 'new' ? 'border-accent/40' : 'border-gray-800', (job('{{ jid }}').status === 'skipped' || job('{{ jid }}').app.closed) ? 'opacity-50' : '']">
+  <button type="button" @click.prevent.stop="toggleBookmark('{{ jid }}')"
+          :title="bookmarked('{{ jid }}') ? 'Remove bookmark' : 'Bookmark'"
+          :class="bookmarked('{{ jid }}') ? 'text-white' : 'text-gray-700 hover:text-gray-400'"
+          class="absolute -top-px right-3 transition-colors">
+    <svg width="20" height="26" viewBox="0 0 20 26" aria-hidden="true">
+      <path d="M1 0h18v25l-9-6.5L1 25z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"
+            :fill="bookmarked('{{ jid }}') ? 'currentColor' : 'none'"/>
+    </svg>
+  </button>
+  <p class="text-xs uppercase tracking-wide text-accent mb-2 pr-8">{{ row.job.company }}</p>
+  <h3 class="font-semibold text-lg leading-snug mb-1">{{ row.job.title }}</h3>
+  <p class="text-sm text-gray-400 mb-3" x-show="job('{{ jid }}').contact" x-text="job('{{ jid }}').contact"></p>
+  <p class="flex flex-wrap items-center gap-2 mb-3 label-mono text-xs">
+    <span class="border rounded-md px-2 py-0.5" :class="stageClass(job('{{ jid }}').app.status)" x-text="job('{{ jid }}').app.stage_label"></span>
+    <span x-show="job('{{ jid }}').app.stage_date" class="text-gray-400" x-text="(job('{{ jid }}').app.stage_estimated ? '≈ ' : '') + fmtDay(job('{{ jid }}').app.stage_date)"></span>
+    <span x-show="job('{{ jid }}').app.next" :class="nextClass(job('{{ jid }}').app.next)" class="truncate" x-text="'· ' + nextText(job('{{ jid }}').app.next)"></span>
+  </p>
+  <div class="flex items-center justify-between gap-2 text-xs text-gray-500">
+    <span class="truncate">{% if row.cv_name %}CV · {{ row.cv_name }}{% else %}<span class="text-amber-300">No Thesis CV yet</span>{% endif %}</span>
+    <span class="flex items-center gap-2 shrink-0">
+      <span>added {{ row.job.first_seen | relative_time }}</span>
+      <button type="button" @click.prevent.stop="logStage(job('{{ jid }}'))"
+              class="border border-gray-700 rounded-md px-2 py-0.5 text-gray-400 hover:text-gray-100 hover:border-gray-500" title="Log a step">+ Log</button>
+    </span>
+  </div>
+</a>

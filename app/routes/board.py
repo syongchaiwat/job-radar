@@ -9,9 +9,11 @@ from app.constants import MATCH_LEVELS, OUTCOME_STATUSES, PROCESS_STATUSES, STAT
 from app.services.tracking import tracking_fields
 from app.deps import get_session
 from app.services.jobs import active_archetypes, enrich_and_match, evidenced_skill_ids, job_archetypes, list_board_rows, ranking_for
-from src.lanes.core import load_lanes
+from src.lanes.core import job_lanes, load_lanes
 from app.templating import templates
+from src.cv import library
 from src.db import Job
+from src.tracking.core import OUTREACH_LABELS
 from src.ingest.dedupe import is_duplicate, job_id as url_job_id
 from src.ingest.manual import build_job, create_manual_job
 from src.ingest.url_fetch import fetch_and_extract
@@ -27,18 +29,27 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
     assignments = job_archetypes(session, aset)
     evidenced = evidenced_skill_ids(session)
     lane_names = {l.key: l.name for l in load_lanes()}
+    cv_names = library.cv_names(session)
     for row in rows:
-        primary = assignments.get(row["job"].id, {}).get("primary")
+        job = row["job"]
+        row["lane_name"] = lane_names.get(job.lane)
+        if job.kind == "outreach":  # no archetype, screening or ranking for labs
+            row["archetype"], row["priority"], row["eligible"] = None, 0, None
+            cv = library.cv_for_job(session, job)
+            row["cv_name"] = "Edited for this lab" if row["own_cv"] else (cv_names.get(cv.archetype_slug) if cv else None)
+            continue
+        primary = assignments.get(job.id, {}).get("primary")
         row["archetype"] = arch_name.get(primary.archetype_id) if primary else None
-        rank = ranking_for(session, row["job"], evidenced)
+        rank = ranking_for(session, job, evidenced)
         row["priority"] = rank["priority"]
         row["eligible"] = rank["assessment"].eligible if rank["assessment"] else None
-        row["lane_name"] = lane_names.get(row["job"].lane)
 
     jobs_json = json.dumps(
         [
             {
                 "job_id": row["job"].id,
+                "kind": row["job"].kind,
+                "cv_name": row.get("cv_name"),
                 "company": row["job"].company,
                 "title": row["job"].title,
                 "excluded": bool(row["screening"] and row["screening"].decision == "exclude"),
@@ -73,6 +84,7 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
             "process": PROCESS_STATUSES,
             "outcome": OUTCOME_STATUSES,
             "statusLabels": STATUS_LABELS,
+            "outreachLabels": OUTREACH_LABELS,
         }
     )
 
@@ -84,8 +96,9 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
             "jobs_json": jobs_json,
             "board_config": board_config,
             "archetype_pills": [(str(a.id), a.name) for a in archetypes],
-            "lane_pills": [(l.key, l.name) for l in load_lanes()],
+            "lane_pills": [(l.key, l.name) for l in job_lanes()],
             "add_form": add_form or {},
+            "n_labs": sum(1 for r in rows if r["job"].kind == "outreach"),
             "added": added,
             "added_row": next((r for r in rows if added and r["job"].id == added.id), None),
         },
@@ -98,23 +111,51 @@ def board(request: Request, added: str | None = None, session: Session = Depends
     return _render_board(request, session, added=added_job)
 
 
+def _add_lab(request: Request, session: Session, url: str, description: str, form: dict):
+    """Lab outreach entry: fetch (or take the pasted text), extract the lab, insert. No screening,
+    archetype or lane assessment: it starts as To contact, in the academic-thesis lane."""
+    from src.ingest.url_fetch import extract_lab, fetch_lab_page
+    from src.lanes.core import OUTREACH_LANE
+    from src.tracking import core as tracking_core
+
+    lab = extract_lab(description, pasted=True) if description else fetch_lab_page(url)
+    if lab is None:
+        return _render_board(request, session, add_form={**form, "needs_description": True})
+    area = (lab.get("research_area") or "").strip()
+    raw = build_job(url, description=lab["description"], title=f"Thesis: {area}" if area else "Thesis topics",
+                    company=lab.get("lab") or "Unknown lab", location=lab.get("location") or None)
+    job = create_manual_job(session, raw)
+    job.kind, job.lane, job.lane_source = "outreach", OUTREACH_LANE, "user"
+    session.add(job)
+    tr = tracking_core.ensure_tracking(session, job.id)
+    tr.contact = lab.get("professor") or None
+    session.add(tr)
+    session.commit()
+    return RedirectResponse(f"/?view=labs&added={job.id}", status_code=303)
+
+
 @router.post("/jobs/add")
 def add_job(
     request: Request,
     session: Session = Depends(get_session),
     url: str = Form(...),
     description: str = Form(""),
+    kind: str = Form("job"),
 ):
     """Same steps as scripts/add_manual_job.py + `run --job-id`, behind a form:
-    dedupe -> auto-fetch (unless a description was pasted) -> insert -> screen."""
+    dedupe -> auto-fetch (unless a description was pasted) -> insert -> screen.
+    kind=outreach adds a lab outreach entry instead (no screening)."""
     url, description = url.strip(), description.strip()
-    form = {"url": url, "description": description}
+    form = {"url": url, "description": description, "kind": kind}
     if not url:
-        return _render_board(request, session, add_form={**form, "error": "Paste a job URL first."})
+        return _render_board(request, session, add_form={**form, "error": "Paste a URL first."})
 
     if is_duplicate(session, url):
         existing = session.get(Job, url_job_id(url))
         return _render_board(request, session, add_form={**form, "duplicate": existing})
+
+    if kind == "outreach":
+        return _add_lab(request, session, url, description, form)
 
     title = company = location = None
     if not description:

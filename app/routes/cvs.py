@@ -1,4 +1,6 @@
-"""CV library: GET /cvs, GET /cvs/{archetype_id}, POST /cvs/{archetype_id}/generate,
+"""CV library: GET /cvs, GET /cvs/new, POST /cvs/custom, GET /cvs/custom/{custom_id},
+POST /cvs/custom/{custom_id}/generate, GET /cvs/custom/{custom_id}/status, POST /cvs/custom/{custom_id}/settings,
+POST /cvs/custom/{custom_id}/archive, GET /cvs/{archetype_id}, POST /cvs/{archetype_id}/generate,
 GET /cvs/{archetype_id}/status, POST /cvs/version/{cv_id}/edit, GET /cvs/version/{cv_id}/pdf,
 POST /jobs/{job_id}/cvlib, GET /jobs/{job_id}/cv/preview, POST /jobs/{job_id}/cv/edit,
 POST /jobs/{job_id}/cv/reset, POST /jobs/{job_id}/cv/restore, GET /jobs/{job_id}/cv/pdf"""
@@ -14,12 +16,13 @@ from sqlmodel import Session, select
 from app.deps import get_session
 from app.templating import templates
 from src.cv import library
-from src.db import Archetype, CVVersion, Job, get_engine
+from src.db import Archetype, CustomCV, CVVersion, Job, get_engine
 from src.market.stats import market_overview
 from src.cv.pdf import markdown_to_pdf
 
 router = APIRouter()
 _RUNNING: dict[int, dict] = {}  # archetype_id -> {"error": str | None}
+_RUNNING_CUSTOM: dict[int, dict] = {}  # custom_cv_id -> {"error": str | None}
 
 
 def _generate_in_background(archetype_id: int, seed_id: int | None) -> None:
@@ -32,6 +35,41 @@ def _generate_in_background(archetype_id: int, seed_id: int | None) -> None:
         _RUNNING.pop(archetype_id, None)
     except Exception as exc:  # shown on the card
         _RUNNING[archetype_id] = {"error": f"{type(exc).__name__}: {exc}"}
+
+
+def _generate_custom_in_background(custom_id: int, seed_id: int | None) -> None:
+    from sqlmodel import Session as S
+
+    try:
+        with S(get_engine()) as session:
+            seed = session.get(CVVersion, seed_id) if seed_id else None
+            library.generate_custom(session, custom_id, seed)
+        _RUNNING_CUSTOM.pop(custom_id, None)
+    except Exception as exc:  # shown on the card
+        _RUNNING_CUSTOM[custom_id] = {"error": f"{type(exc).__name__}: {exc}"}
+
+
+def _start_custom(custom_id: int, seed_id: int | None = None) -> None:
+    if custom_id in _RUNNING_CUSTOM and not _RUNNING_CUSTOM[custom_id].get("error"):
+        return
+    _RUNNING_CUSTOM[custom_id] = {"error": None}
+    threading.Thread(target=_generate_custom_in_background, args=(custom_id, seed_id), daemon=True).start()
+
+
+def _custom_card(session: Session, custom: CustomCV) -> dict:
+    vs = library.versions(session, library.custom_slug(custom))
+    latest = vs[-1] if vs else None
+    used_by = len(session.exec(select(Job).where(Job.cv_version_id.in_([v.id for v in vs]))).all()) if vs else 0
+    return {"custom": custom, "latest": latest, "n_versions": len(vs), "versions": vs, "used_by": used_by,
+            "status": library.custom_status(latest), "running": _RUNNING_CUSTOM.get(custom.id),
+            "lane_sentence": library.custom_lane_slot(custom)}
+
+
+def _custom(session: Session, custom_id: int) -> CustomCV:
+    custom = session.get(CustomCV, custom_id)
+    if custom is None:
+        raise HTTPException(status_code=404, detail="CV not found")
+    return custom
 
 
 def _cards(session: Session) -> list[dict]:
@@ -54,8 +92,86 @@ def library_page(request: Request, session: Session = Depends(get_session)):
         a = library.primary_archetype(session, job.id)
         if a:
             jobs_per_arch[a.id] = jobs_per_arch.get(a.id, 0) + 1
-    return templates.TemplateResponse(request=request, name="cv_library.html",
-                                      context={"cards": cards, "jobs_per_arch": jobs_per_arch})
+    return templates.TemplateResponse(request=request, name="cv_library.html", context={
+        "cards": cards, "jobs_per_arch": jobs_per_arch, "kinds_label": library.CUSTOM_KINDS,
+        "custom_cards": [_custom_card(session, c) for c in library.customs(session)],
+        "archived": [c for c in library.customs(session, include_archived=True) if c.archived],
+    })
+
+
+def _labs(session: Session) -> list[Job]:
+    """Lab outreach entries, offered as context for an AI-drafted CV."""
+    return session.exec(select(Job).where(Job.kind == "outreach").order_by(Job.company)).all()
+
+
+@router.get("/cvs/new")
+def new_cv_page(request: Request, session: Session = Depends(get_session)):
+    return templates.TemplateResponse(request=request, name="cv_new.html", context={"kinds": library.CUSTOM_KINDS, "labs": _labs(session)})
+
+
+@router.post("/cvs/custom")
+def create_custom(
+    session: Session = Depends(get_session),
+    name: str = Form(...),
+    kind: str = Form("thesis"),
+    method: str = Form("ai"),
+    brief: str = Form(""),
+    markdown: str = Form(""),
+    context_job_ids: list[str] = Form([]),
+):
+    """New CV of my own: drafted by the CV loop from the brief, or hand-written / pasted."""
+    if method == "paste":
+        custom = library.create_custom(session, name, kind, brief, context_job_ids, markdown=markdown or "## Summary\n\n")
+    else:
+        custom = library.create_custom(session, name, kind, brief, context_job_ids)
+        _start_custom(custom.id)
+    return RedirectResponse(f"/cvs/custom/{custom.id}", status_code=303)
+
+
+@router.get("/cvs/custom/{custom_id}")
+def custom_detail(custom_id: int, request: Request, session: Session = Depends(get_session)):
+    card = _custom_card(session, _custom(session, custom_id))
+    return templates.TemplateResponse(request=request, name="cv_custom.html", context={
+        "card": card, "kinds": library.CUSTOM_KINDS, "labs": _labs(session),
+        "context_ids": json.loads(card["custom"].context_job_ids or "[]")})
+
+
+@router.post("/cvs/custom/{custom_id}/generate")
+def generate_custom(custom_id: int, session: Session = Depends(get_session), seed_id: str = Form("")):
+    _custom(session, custom_id)
+    _start_custom(custom_id, int(seed_id) if seed_id else None)
+    return RedirectResponse(f"/cvs/custom/{custom_id}", status_code=303)
+
+
+@router.get("/cvs/custom/{custom_id}/status")
+def generate_custom_status(custom_id: int):
+    state = _RUNNING_CUSTOM.get(custom_id)
+    if state is None or state.get("error"):
+        return HTMLResponse("", headers={"HX-Refresh": "true"})
+    return HTMLResponse('<span class="animate-pulse">Drafting and critiquing… (2-3 minutes)</span>')
+
+
+@router.post("/cvs/custom/{custom_id}/settings")
+def custom_settings(custom_id: int, session: Session = Depends(get_session), name: str = Form(...),
+                    kind: str = Form("thesis"), brief: str = Form(""), context_job_ids: list[str] = Form([])):
+    custom = _custom(session, custom_id)
+    custom.name = name.strip() or custom.name
+    custom.kind = kind if kind in library.CUSTOM_KINDS else custom.kind
+    custom.brief = brief.strip()
+    custom.context_job_ids = json.dumps(context_job_ids)
+    session.add(custom)
+    session.commit()
+    return RedirectResponse(f"/cvs/custom/{custom_id}?saved=settings", status_code=303)
+
+
+@router.post("/cvs/custom/{custom_id}/archive")
+def custom_archive(custom_id: int, session: Session = Depends(get_session), value: str = Form("1")):
+    """Archive hides a CV from the library and pickers; jobs that use it keep it."""
+    custom = _custom(session, custom_id)
+    custom.archived = value == "1"
+    session.add(custom)
+    session.commit()
+    return RedirectResponse("/cvs" if custom.archived else f"/cvs/custom/{custom_id}", status_code=303)
 
 
 @router.get("/cvs/{archetype_id}")
@@ -94,7 +210,8 @@ def edit(cv_id: int, session: Session = Depends(get_session), markdown: str = Fo
     markdown = markdown.replace("\r\n", "\n").strip() + "\n"
     if markdown.strip() != base.draft_markdown.strip():
         library.save_edit(session, base, markdown)
-    return RedirectResponse(f"/cvs/{base.archetype_id}", status_code=303)
+    back = f"/cvs/custom/{base.custom_cv_id}" if base.custom_cv_id else f"/cvs/{base.archetype_id}"
+    return RedirectResponse(back, status_code=303)
 
 
 def _pdf_response(markdown: str, filename: str) -> FileResponse:
@@ -111,6 +228,10 @@ def version_pdf(cv_id: int, session: Session = Depends(get_session)):
     cv = session.get(CVVersion, cv_id)
     if cv is None:
         raise HTTPException(status_code=404, detail="CV not found")
+    if cv.custom_cv_id:
+        custom = session.get(CustomCV, cv.custom_cv_id)
+        md = library.apply_lane_slot(cv.draft_markdown, library.custom_lane_slot(custom))
+        return _pdf_response(md, f"CV_{(custom.name if custom else 'custom').replace(' ', '_').replace('/', '-')}_v{cv.id}.pdf")
     return _pdf_response(cv.draft_markdown, f"CV_{cv.archetype_slug}_v{cv.id}.pdf")
 
 
@@ -141,6 +262,8 @@ def preview_job_cv(job_id: str, pick: str = "", cv_version_id: str = "", job_cv_
         return JSONResponse({"markdown": row.markdown if row else ""})
     if cv_version_id:
         cv = session.get(CVVersion, int(cv_version_id))
+    elif job.kind == "outreach":
+        cv = library.default_thesis_cv(session)
     else:
         a = library.primary_archetype(session, job_id)
         vs = library.versions(session, a.slug) if a else []

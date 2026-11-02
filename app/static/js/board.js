@@ -31,6 +31,19 @@ const STATUS_FILTERS = {
 
 const APPLIED_SCOPES = { all: "All", open: "Open", closed: "Closed" };
 
+// Labs section (lab outreach entries): its own filters and sorts.
+const LAB_FILTERS = {
+  open: "Open",
+  contact: "To contact",
+  waiting: "Waiting",
+  replied: "Replied",
+  upcoming: "Upcoming",
+  closed: "Closed",
+  skipped: "Skipped",
+  all: "All",
+};
+const LAB_SORTS = { next: "Next action", activity: "Last activity", newest: "Newest added" };
+
 // Next-action urgency for the "Next action" sort.
 const NEXT_ORDER = ["debrief", "due", "upcoming", "follow_up"];
 
@@ -54,8 +67,16 @@ function board() {
     selecting: false,
     selected: [],
     view: "cards",
+    section: "jobs",  // jobs | labs
+    labFilter: "open",
+    labFilters: LAB_FILTERS,
+    labSort: "next",
+    labSorts: LAB_SORTS,
     init() {
       try { this.view = localStorage.getItem("board.view") || "cards"; } catch (e) {}
+      try { this.section = localStorage.getItem("board.section") || "jobs"; } catch (e) {}
+      const params = new URLSearchParams(location.search);
+      if (["jobs", "labs"].includes(params.get("view"))) this.section = params.get("view");
       const el = document.getElementById("jobs-data");
       this.jobs = el ? JSON.parse(el.textContent) : [];
       const cfg = document.getElementById("board-config");
@@ -65,6 +86,30 @@ function board() {
         if (!j.job_id) return;
         Object.assign(j, e.detail.application, { app: e.detail.application, status: e.detail.application.status });
       });
+    },
+    setSection(s) {
+      this.section = s;
+      try { localStorage.setItem("board.section", s); } catch (e) {}
+      const url = new URL(location.href);
+      url.searchParams.set("view", s);
+      url.searchParams.delete("added");
+      history.replaceState(null, "", url);
+    },
+    inSection(j) {
+      return (j.kind === "outreach") === (this.section === "labs");
+    },
+    matchesLab(j) {
+      const a = j.app;
+      switch (this.labFilter) {
+        case "open": return j.status !== "skipped" && !a.closed;
+        case "contact": return j.status === "new";
+        case "waiting": return j.status === "applied";
+        case "replied": return a.applied && !a.closed && a.reached >= 2;
+        case "upcoming": return !!(a.next && a.next.kind === "upcoming");
+        case "closed": return a.closed;
+        case "skipped": return j.status === "skipped";
+        default: return true;
+      }
     },
     matchesStatus(j) {
       const a = j.app;
@@ -79,12 +124,19 @@ function board() {
         default: return true;
       }
     },
-    countWhere(fn) {
-      return this.jobs.filter(fn).length;
+    countWhere(fn) {  // within the current section (Jobs or Labs)
+      return this.jobs.filter((j) => this.inSection(j) && fn(j)).length;
+    },
+    get sectionJobs() {
+      return this.jobs.filter((j) => this.inSection(j));
     },
     get visible() {
       const q = this.search.trim().toLowerCase();
-      return this.jobs.filter(
+      if (this.section === "labs") {
+        return this.sectionJobs.filter((j) => this.matchesLab(j) &&
+          (!q || [j.company, j.title, j.contact].some((s) => (s || "").toLowerCase().includes(q))));
+      }
+      return this.sectionJobs.filter(
         (j) =>
           this.matchesStatus(j) &&
           (this.marketFilter === "all" || (this.marketFilter === "on") === j.market_data) &&
@@ -102,10 +154,13 @@ function board() {
       const i = list.indexOf(value);
       return i === -1 ? list.length : i;
     },
+    get activeSort() {
+      return this.section === "labs" ? this.labSort : this.sort;
+    },
     compare(a, b) {
       const newest = b.first_seen.localeCompare(a.first_seen);
       const by = (fn) => fn(a) - fn(b) || newest;
-      switch (this.sort) {
+      switch (this.activeSort) {
         case "review": return by((j) => (j.status === "new" ? 0 : 1));
         case "priority": return (b.priority || 0) - (a.priority || 0) || newest;
         case "match": return by((j) => this.rankIn(this.config.matchOrder, j.match_level));
@@ -114,7 +169,8 @@ function board() {
         case "cv": return by((j) => (j.own_cv ? 0 : 1));
         case "activity": return (b.app.last_activity || "").localeCompare(a.app.last_activity || "") || newest;
         case "next": {
-          const rank = (j) => (j.app.next ? NEXT_ORDER.indexOf(j.app.next.kind) : NEXT_ORDER.length + (j.app.applied && !j.app.closed ? 0 : 1));
+          const waiting = (j) => (j.app.applied ? !j.app.closed : j.kind === "outreach" && j.status === "new");  // labs: to contact counts as open
+          const rank = (j) => (j.app.next ? NEXT_ORDER.indexOf(j.app.next.kind) : NEXT_ORDER.length + (waiting(j) ? 0 : 1));
           const day = (j) => (j.app.next && j.app.next.date) || "9999";
           return rank(a) - rank(b) || day(a).localeCompare(day(b)) || (b.app.last_activity || "").localeCompare(a.app.last_activity || "");
         }
@@ -163,6 +219,7 @@ function board() {
       if (!n) return "";
       if (n.kind === "upcoming") return `${n.label} · ${weekday(n.date)} ${fmtDay(n.date)}${n.time ? " " + n.time : ""}`;
       if (n.kind === "due") return `Assessment due ${relDay(n.date)}`;
+      if (n.kind === "follow_up" && this.section === "labs") return `Follow up? ${n.days} days without a reply`;
       if (n.kind === "follow_up") return `Follow up? ${n.days} days quiet`;
       return n.label;
     },

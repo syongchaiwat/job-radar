@@ -29,7 +29,7 @@ from typing import Optional
 import httpx
 
 from src.llm.call import call, load_prompt, truncate
-from src.llm.schemas import ExtractedJobPosting
+from src.llm.schemas import ExtractedJobPosting, ExtractedLabPage
 
 USER_AGENT = "job-radar/1.0 (+https://github.com/syongchaiwat/job-radar)"
 
@@ -76,6 +76,32 @@ def fetch_and_extract(url: str) -> Optional[dict]:
         "location": parsed.location or None,
         "description": parsed.description,
     }
+
+
+def fetch_lab_page(url: str) -> Optional[dict]:
+    """Like fetch_and_extract, for a research lab's page (lab outreach entries):
+    {lab, professor, research_area, location, description}, or None when blocked or empty."""
+    try:
+        html = _fetch_html(url)
+        page_text = _html_to_text(html)
+        if len(page_text) < 200:
+            return None
+    except FetchBlocked:
+        return None
+    return extract_lab(page_text)
+
+
+def extract_lab(page_text: str, pasted: bool = False) -> Optional[dict]:
+    """Lab fields from page text (fetched, or pasted when a site blocks fetching)."""
+    prompt = load_prompt("ingest/lab_page").format(page_text=truncate(page_text, n=12000))
+    parsed, _log = call("fast", prompt, ExtractedLabPage)
+    if not pasted and (not parsed.lab or len(parsed.description) < 100):
+        return None
+    out = {k: ("" if v.strip().strip("<>[]()").lower() in ("unknown", "n/a", "none", "not stated") else v)
+           for k, v in parsed.model_dump().items()}
+    if pasted:
+        out["description"] = page_text  # keep what I pasted as is
+    return out
 
 
 def _fetch_html(url: str) -> str:

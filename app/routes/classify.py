@@ -42,7 +42,7 @@ def classify_page(request: Request, session: Session = Depends(get_session)):
     if aset:
         for r in session.exec(select(JobArchetype).where(JobArchetype.set_version == aset.version, JobArchetype.role == "primary")).all():
             counts[r.archetype_id] = counts.get(r.archetype_id, 0) + 1
-    jobs = session.exec(select(Job)).all()
+    jobs = session.exec(select(Job).where(Job.kind == "job")).all()
     assigned = {r.job_id for r in session.exec(select(JobArchetype).where(JobArchetype.set_version == aset.version)).all()} if aset else set()
     run = _latest_run(session)
     proposal = rework.load_proposal(run) if run and run.status == "draft" else None

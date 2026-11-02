@@ -1,7 +1,7 @@
 {# "Add a job": POST /jobs/add. add_form carries the previous submission back
    when it needs another step (blocked fetch -> paste description) or failed. #}
 <div class="border border-gray-800 rounded-lg p-4 mb-6" x-data="{ working: false }">
-  <p class="text-xs uppercase tracking-wide text-gray-500 mb-3">Add a job</p>
+  <p class="text-xs uppercase tracking-wide text-gray-500 mb-3" x-text="section === 'labs' ? 'Add a lab' : 'Add a job'">Add a job</p>
 
   {% if added %}
   <div class="border border-accent/50 rounded p-3 mb-3 text-sm flex flex-wrap items-center gap-2">
@@ -36,26 +36,27 @@
   {% endif %}
 
   <form id="add-job-form" method="post" action="/jobs/add" @submit="working = true" class="space-y-2">
+    <input type="hidden" name="kind" :value="section === 'labs' ? 'outreach' : 'job'">
     <div class="flex flex-col sm:flex-row gap-2">
       <input type="url" name="url" required value="{{ add_form.url or '' }}"
-             placeholder="Paste a job URL (LinkedIn, jobs.ch, company careers page...)"
+:placeholder="section === 'labs' ? 'Paste a lab or research group page (open thesis projects, team page...)' : 'Paste a job URL (LinkedIn, jobs.ch, company careers page...)'"
              class="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm">
       <button type="submit" :disabled="working"
               class="border border-accent text-accent rounded px-4 py-1.5 text-sm whitespace-nowrap disabled:opacity-50">
-        <span x-show="!working">Add &amp; screen</span>
-        <span x-show="working" x-cloak class="animate-pulse">Fetching &amp; screening…</span>
+        <span x-show="!working" x-text="section === 'labs' ? 'Add lab' : 'Add & screen'">Add &amp; screen</span>
+        <span x-show="working" x-cloak class="animate-pulse" x-text="section === 'labs' ? 'Fetching…' : 'Fetching & screening…'"></span>
       </button>
     </div>
 
     {% if add_form.needs_description %}
-    <p class="text-sm text-amber-300">This site blocked auto-fetch. Paste the job description below and submit again.</p>
+    <p class="text-sm text-amber-300">This site blocked auto-fetch (or the page had no readable content). Paste its text below and submit again.</p>
     {% endif %}
     <details {% if add_form.needs_description or add_form.description %}open{% endif %}>
-      <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300">Paste the description instead of auto-fetching</summary>
-      <textarea name="description" rows="8" placeholder="Job description text (title and company get extracted from it)"
+      <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300">Paste the page text instead of auto-fetching</summary>
+      <textarea name="description" rows="8" :placeholder="section === 'labs' ? 'Lab page text (lab, professor and research area get extracted from it)' : 'Job description text (title and company get extracted from it)'"
                 class="w-full mt-2 bg-gray-900 border border-gray-700 rounded p-2 text-sm">{{ add_form.description or '' }}</textarea>
     </details>
-    <p class="text-xs text-gray-500" x-show="!working">Fetches the posting, extracts it, then screens it on Claude (~10–20s).</p>
+    <p class="text-xs text-gray-500" x-show="!working" x-text="section === 'labs' ? 'Fetches the page and pulls out the lab, professor and research area (~5-10s). No screening: it starts as To contact.' : 'Fetches the posting, extracts it, then screens it on Claude (~10–20s).'"></p>
     <p class="text-xs text-gray-500" x-show="working" x-cloak>Working, this takes ~10–20 seconds. Don't close the page.</p>
   </form>
 </div>
