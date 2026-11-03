@@ -44,6 +44,22 @@ const LAB_FILTERS = {
 };
 const LAB_SORTS = { next: "Next action", activity: "Last activity", newest: "Newest added" };
 
+// Events section (career fairs, workshops, info sessions).
+const EVENT_FILTERS = {
+  open: "Coming up",
+  new: "New",
+  interested: "Interested",
+  registered: "Registered",
+  attended: "Attended",
+  closed: "Closed",
+  skipped: "Skipped",
+  all: "All",
+};
+const EVENT_SORTS = { date: "Event date", next: "Next action", newest: "Newest added" };
+
+// Board section -> Job.kind
+const SECTION_KIND = { jobs: "job", labs: "outreach", events: "event" };
+
 // Next-action urgency for the "Next action" sort.
 const NEXT_ORDER = ["debrief", "due", "upcoming", "follow_up"];
 
@@ -72,11 +88,16 @@ function board() {
     labFilters: LAB_FILTERS,
     labSort: "next",
     labSorts: LAB_SORTS,
+    eventFilter: "open",
+    eventFilters: EVENT_FILTERS,
+    eventSort: "date",
+    eventSorts: EVENT_SORTS,
     init() {
       try { this.view = localStorage.getItem("board.view") || "cards"; } catch (e) {}
       try { this.section = localStorage.getItem("board.section") || "jobs"; } catch (e) {}
       const params = new URLSearchParams(location.search);
-      if (["jobs", "labs"].includes(params.get("view"))) this.section = params.get("view");
+      if (params.get("view") in SECTION_KIND) this.section = params.get("view");
+      if (!(this.section in SECTION_KIND)) this.section = "jobs";
       const el = document.getElementById("jobs-data");
       this.jobs = el ? JSON.parse(el.textContent) : [];
       const cfg = document.getElementById("board-config");
@@ -96,7 +117,32 @@ function board() {
       history.replaceState(null, "", url);
     },
     inSection(j) {
-      return (j.kind === "outreach") === (this.section === "labs");
+      return (j.kind || "job") === SECTION_KIND[this.section];
+    },
+    kindCount(section) {
+      return this.jobs.filter((j) => (j.kind || "job") === SECTION_KIND[section]).length;
+    },
+    // Events: the event's date (the logged Event entry wins over the date from the page).
+    eventDay(j) {
+      const ev = [...(j.app.events || [])].reverse().find((e) => e.stage === "interview");
+      return (ev && ev.date) || j.event_date || "";
+    },
+    attended(j) {
+      return (j.app.events || []).some((e) => e.stage === "interview" && !e.upcoming);
+    },
+    matchesEvent(j) { return this.matchesEventAs(j, this.eventFilter); },
+    matchesEventAs(j, filter) {
+      const a = j.app;
+      switch (filter) {
+        case "open": return j.status !== "skipped" && !a.closed && !this.attended(j) && (!this.eventDay(j) || this.eventDay(j) >= isoDay());
+        case "new": return j.status === "new";
+        case "interested": return j.status === "shortlist";
+        case "registered": return a.applied && !a.closed && !this.attended(j);
+        case "attended": return this.attended(j);
+        case "closed": return a.closed;
+        case "skipped": return j.status === "skipped";
+        default: return true;
+      }
     },
     matchesLab(j) {
       const a = j.app;
@@ -132,6 +178,10 @@ function board() {
     },
     get visible() {
       const q = this.search.trim().toLowerCase();
+      if (this.section === "events") {
+        return this.sectionJobs.filter((j) => this.matchesEvent(j) &&
+          (!q || [j.company, j.title, j.location].some((s) => (s || "").toLowerCase().includes(q))));
+      }
       if (this.section === "labs") {
         return this.sectionJobs.filter((j) => this.matchesLab(j) &&
           (!q || [j.company, j.title, j.contact].some((s) => (s || "").toLowerCase().includes(q))));
@@ -155,7 +205,10 @@ function board() {
       return i === -1 ? list.length : i;
     },
     get activeSort() {
-      return this.section === "labs" ? this.labSort : this.sort;
+      return { labs: this.labSort, events: this.eventSort }[this.section] || this.sort;
+    },
+    get activeSortLabel() {
+      return { labs: LAB_SORTS, events: EVENT_SORTS }[this.section]?.[this.activeSort] || SORTS[this.sort];
     },
     compare(a, b) {
       const newest = b.first_seen.localeCompare(a.first_seen);
@@ -167,6 +220,11 @@ function board() {
         case "archetype": return by((j) => this.rankIn(this.config.archetypeOrder, j.archetype));
         case "status": return by((j) => this.rankIn(this.config.statusOrder, j.status));
         case "cv": return by((j) => (j.own_cv ? 0 : 1));
+        case "date": {  // soonest upcoming first, then past events (most recent first), undated last
+          const key = (j) => { const d = this.eventDay(j); return !d ? [2, ""] : d >= isoDay() ? [0, d] : [1, d]; };
+          const [ga, da] = key(a), [gb, db] = key(b);
+          return ga - gb || (ga === 1 ? db.localeCompare(da) : da.localeCompare(db)) || newest;
+        }
         case "activity": return (b.app.last_activity || "").localeCompare(a.app.last_activity || "") || newest;
         case "next": {
           const waiting = (j) => (j.app.applied ? !j.app.closed : j.kind === "outreach" && j.status === "new");  // labs: to contact counts as open
@@ -210,7 +268,8 @@ function board() {
       return s ? s[0].toUpperCase() + s.slice(1) : "";
     },
     logStage(j, extra = {}) {
-      this.$dispatch("log-stage", { jobId: j.job_id, company: j.company, title: j.title, app: j.app, ...extra });
+      this.$dispatch("log-stage", { jobId: j.job_id, company: j.company, title: j.title, app: j.app,
+                                    eventDate: j.event_date, eventTime: j.event_time, ...extra });
     },
     toggleRow(id) {
       this.expanded = this.expanded === id ? null : id;

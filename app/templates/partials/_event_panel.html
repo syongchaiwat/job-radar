@@ -1,0 +1,47 @@
+{# Job page, event entry: event details (name, host, date and time, place, registration deadline) and,
+   before registering, Interested / Skip / back to New. #}
+<div class="border border-gray-800 rounded-xl p-4 space-y-3 text-sm" x-data="{ editing: {{ 'true' if not job.event_date else 'false' }} }">
+  <div class="flex items-center gap-2">
+    <p class="text-xs uppercase tracking-wide text-gray-500">Event details</p>
+    <button type="button" @click="editing = !editing" class="ml-auto text-xs text-gray-500 hover:text-gray-200" x-text="editing ? 'Cancel' : 'Edit'"></button>
+  </div>
+  <dl x-show="!editing" class="space-y-1.5">
+    <div class="flex gap-2"><dt class="text-gray-500 w-24 shrink-0">Event</dt><dd class="text-gray-200">{{ job.title }}</dd></div>
+    <div class="flex gap-2"><dt class="text-gray-500 w-24 shrink-0">Host</dt><dd class="text-gray-200">{{ job.company }}</dd></div>
+    <div class="flex gap-2"><dt class="text-gray-500 w-24 shrink-0">When</dt><dd class="text-gray-200">{% if job.event_date %}{{ job.event_date | event_day }}{% if job.event_time %} · {{ job.event_time }}{% endif %}{% else %}–{% endif %}</dd></div>
+    <div class="flex gap-2"><dt class="text-gray-500 w-24 shrink-0">Where</dt><dd class="text-gray-200">{{ job.location or '–' }}</dd></div>
+    <div class="flex gap-2"><dt class="text-gray-500 w-24 shrink-0">Register by</dt><dd class="text-gray-200">{{ (job.deadline | event_day) if job.deadline else '–' }}</dd></div>
+  </dl>
+  <form x-show="editing" x-cloak method="post" action="/jobs/{{ job.id }}/event" class="space-y-2">
+    <input name="title" value="{{ job.title }}" required placeholder="Event name" class="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-1.5">
+    <input name="company" value="{{ job.company }}" required placeholder="Host" class="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-1.5">
+    <div class="grid grid-cols-[1fr_auto] gap-2">
+      <label class="block"><span class="text-xs text-gray-500">Date</span>
+        <input type="date" name="event_date" value="{{ job.event_date or '' }}" class="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-1.5 [color-scheme:dark]"></label>
+      <label class="block"><span class="text-xs text-gray-500">Start</span>
+        <input type="time" name="event_time" value="{{ job.event_time or '' }}" class="w-28 bg-gray-950 border border-gray-700 rounded-md px-3 py-1.5 [color-scheme:dark]"></label>
+    </div>
+    <input name="location" value="{{ job.location or '' }}" placeholder="Venue / city / Online" class="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-1.5">
+    <label class="block"><span class="text-xs text-gray-500">Register by</span>
+      <input type="date" name="deadline" value="{{ job.deadline or '' }}" class="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-1.5 [color-scheme:dark]"></label>
+    <button class="border border-gray-700 rounded-md px-4 py-1.5 hover:border-gray-500">Save</button>
+    <p class="text-xs text-gray-500">A scheduled Event entry moves with a new date.</p>
+  </form>
+  {% if not application.applied %}
+  <div class="flex flex-wrap items-center gap-2 border-t border-gray-800 pt-3">
+    {% if application.status in ('skipped', 'shortlist') %}
+    <span class="text-gray-400">{{ 'Skipped.' if application.status == 'skipped' else 'Interested.' }}</span>
+    <form method="post" action="/jobs/{{ job.id }}/review" class="ml-auto"><input type="hidden" name="action" value="reset">
+      <button class="border border-gray-700 rounded-md px-3 py-1 hover:border-gray-500">Back to New</button></form>
+    {% endif %}
+    {% if application.status != 'shortlist' %}
+    <form method="post" action="/jobs/{{ job.id }}/review" class="{{ '' if application.status == 'skipped' else 'ml-auto' }}"><input type="hidden" name="action" value="shortlist">
+      <button class="border border-accent/60 text-accent rounded-md px-3 py-1 hover:bg-accent/10">Interested</button></form>
+    {% endif %}
+    {% if application.status != 'skipped' %}
+    <form method="post" action="/jobs/{{ job.id }}/review"><input type="hidden" name="action" value="skipped">
+      <button class="border border-gray-700 rounded-md px-3 py-1 text-gray-400 hover:border-gray-500 hover:text-gray-200">Skip</button></form>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>

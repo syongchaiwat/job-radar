@@ -169,6 +169,13 @@ First build was Streamlit (Board table + widget-based Job Detail + Profile), ver
 - **Classify map:** UMAP layout saved to `data/classify_layout.json`; reruns only when the job list or archetype set changes (or via *Recompute map layout*); UMAP calls serialized (`UMAP_LOCK`) after a Numba crash.
 - Fixes on the way: grade check matched "within one grade" (eval wording); letter PDF first rendered everything as the header (CV parser), now a dedicated letter renderer.
 
+**Events as a third kind — 3 Nov 2026.** `Job.kind = "event"` with `event_date` / `event_time`; board sections Jobs | Labs | Events.
+- **Adding:** the Events section's add form posts `kind=event`; `fetch_event_page` / `extract_event` (prompt `ingest/event_page`) pull event, host, date, time, place, registration deadline (stored in `deadline`). The lab and event extractors now share `_extract`.
+- **Stage log:** `EVENT_LABELS` (New, Interested, Skipped, Registered, Confirmed, Event, Not selected, No response, Didn't go, Registration closed); the Event entry reads "Attended" once past; stepper Registered → Confirmed → Event; no follow-up nudge, debrief "How did the event go?". Logging Registered or Confirmed with a known event date schedules the Event entry; editing the date moves a still-upcoming one.
+- **Board:** Events tab with chips (coming up, new, registered, attended), filters, sorts (event date first), event cards and table columns (event & host, event date, register-by). Job page: Event panel (edit details; Interested / Skip / back to New); CV panel only for events that ask for one (no default CV).
+- **Kept out:** every job-only query filters `kind == "job"`, so events skip screening, enrichment, archetypes, Classify and job stats.
+- **Migration:** the two existing event entries (an open house, a student workshop) moved to `kind = event` with their dates, times and venues; their logs read Registered / Not selected.
+
 **Lab outreach entries + Jobs | Labs board — 2 Nov 2026.** Second half of the lab-outreach feature.
 - **Data:** `Job.kind` (`job` | `outreach`). Labs are added from the board's Labs section (the add form posts `kind=outreach`): `fetch_lab_page` / `extract_lab` (prompt `ingest/lab_page`) pull lab, professor (stored as the tracking contact), research area (title "Thesis: <area>") and the page text. No role card, archetype, lane assessment or screening; `academic-thesis` lane.
 - **Kept out of the job machinery:** screening `run_all`, `scripts/enrich_jobs.py`, archetype rework assignment, Classify counts, `application_stats` (labs have no role card, so feature loading and lane assessment skip them too).

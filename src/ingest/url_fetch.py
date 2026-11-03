@@ -29,7 +29,7 @@ from typing import Optional
 import httpx
 
 from src.llm.call import call, load_prompt, truncate
-from src.llm.schemas import ExtractedJobPosting, ExtractedLabPage
+from src.llm.schemas import ExtractedEventPage, ExtractedJobPosting, ExtractedLabPage
 
 USER_AGENT = "job-radar/1.0 (+https://github.com/syongchaiwat/job-radar)"
 
@@ -78,30 +78,49 @@ def fetch_and_extract(url: str) -> Optional[dict]:
     }
 
 
-def fetch_lab_page(url: str) -> Optional[dict]:
-    """Like fetch_and_extract, for a research lab's page (lab outreach entries):
-    {lab, professor, research_area, location, description}, or None when blocked or empty."""
+def _page_text(url: str) -> Optional[str]:
     try:
-        html = _fetch_html(url)
-        page_text = _html_to_text(html)
-        if len(page_text) < 200:
-            return None
+        text = _html_to_text(_fetch_html(url))
     except FetchBlocked:
         return None
-    return extract_lab(page_text)
+    return text if len(text) >= 200 else None
 
 
-def extract_lab(page_text: str, pasted: bool = False) -> Optional[dict]:
-    """Lab fields from page text (fetched, or pasted when a site blocks fetching)."""
-    prompt = load_prompt("ingest/lab_page").format(page_text=truncate(page_text, n=12000))
-    parsed, _log = call("fast", prompt, ExtractedLabPage)
-    if not pasted and (not parsed.lab or len(parsed.description) < 100):
-        return None
+def _extract(page_text: str, prompt_name: str, schema, name_field: str, pasted: bool, **fmt) -> Optional[dict]:
+    """Fields from page text (fetched, or pasted when a site blocks fetching); placeholders like "<UNKNOWN>" become ""."""
+    prompt = load_prompt(prompt_name).format(page_text=truncate(page_text, n=12000), **fmt)
+    parsed, _log = call("fast", prompt, schema)
     out = {k: ("" if v.strip().strip("<>[]()").lower() in ("unknown", "n/a", "none", "not stated") else v)
            for k, v in parsed.model_dump().items()}
+    if not pasted and (not out[name_field] or len(out["description"]) < 100):
+        return None
     if pasted:
         out["description"] = page_text  # keep what I pasted as is
     return out
+
+
+def fetch_lab_page(url: str) -> Optional[dict]:
+    """Like fetch_and_extract, for a research lab's page (lab outreach entries):
+    {lab, professor, research_area, location, description}, or None when blocked or empty."""
+    text = _page_text(url)
+    return extract_lab(text) if text else None
+
+
+def extract_lab(page_text: str, pasted: bool = False) -> Optional[dict]:
+    return _extract(page_text, "ingest/lab_page", ExtractedLabPage, "lab", pasted)
+
+
+def fetch_event_page(url: str) -> Optional[dict]:
+    """Like fetch_and_extract, for a career event's page:
+    {event, host, date, time, location, registration_deadline, description}, or None when blocked or empty."""
+    text = _page_text(url)
+    return extract_event(text) if text else None
+
+
+def extract_event(page_text: str, pasted: bool = False) -> Optional[dict]:
+    from datetime import date
+
+    return _extract(page_text, "ingest/event_page", ExtractedEventPage, "event", pasted, today=date.today().isoformat())
 
 
 def _fetch_html(url: str) -> str:

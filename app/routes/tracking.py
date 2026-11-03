@@ -50,6 +50,9 @@ async def log_stage(job_id: str, request: Request, session: Session = Depends(ge
             applied_on=form.get("applied_on"), reopen=form.get("reopen") == "1", snapshot=svc.snapshot,
             kind=job.kind,
         )
+        if job.kind == "event" and form.get("stage") in ("applied", "screening") and job.event_date:
+            if not any(e.stage == "interview" for e in core.events_for(session, job_id)):
+                core.log_stage(session, job_id, "interview", on=job.event_date, time=job.event_time, kind="event")
     except core.NeedsReopen as exc:
         session.rollback()
         return JSONResponse({"ok": False, "needs_reopen": True, "error": str(exc)}, status_code=409)

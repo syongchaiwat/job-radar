@@ -84,3 +84,45 @@ def test_labs_default_to_the_newest_thesis_cv(session):
     cv = library.cv_for_job(session, session.get(Job, "lab"))
     assert cv is not None and cv.custom_cv_id == thesis.id
     assert library.cv_for_job(session, session.get(Job, "job")) is None  # jobs never fall back to own CVs
+
+
+# --- events (Job.kind == "event") ---------------------------------------------------------
+
+@pytest.fixture
+def ev_session(session):
+    session.add(Job(id="ev", source="manual", url="https://example.com/ev", company="Host", title="Open House", kind="event"))
+    session.commit()
+    return session
+
+
+def test_event_names_and_attended_once_past(ev_session):
+    core.log_stage(ev_session, "ev", "shortlist", kind="event")
+    assert summary(ev_session, "ev", "event")["stage_label"] == "Interested"
+    core.log_stage(ev_session, "ev", "applied", on=days(-10), kind="event")
+    core.log_stage(ev_session, "ev", "interview", on=days(3), time="17:30", kind="event")
+    s = summary(ev_session, "ev", "event")
+    assert [e["label"] for e in s["events"]] == ["Registered", "Event"]
+    assert s["next"]["kind"] == "upcoming" and s["next"]["label"] == "Event"
+    assert [st["label"] for st in s["stepper"]] == ["Registered", "Confirmed", "Event"]
+    ev = core.events_for(ev_session, "ev")[-1]
+    core.update_event(ev_session, ev, on=days(-1), time="17:30")
+    s = summary(ev_session, "ev", "event")
+    assert s["events"][-1]["label"] == "Attended" and s["next"]["label"] == "How did the event go?"
+
+
+def test_events_refuse_job_only_stages_and_never_nag(ev_session):
+    for stage in ("assessment", "offer", "accepted"):
+        with pytest.raises(core.StageError):
+            core.log_stage(ev_session, "ev", stage, kind="event")
+    core.log_stage(ev_session, "ev", "applied", on=days(-40), kind="event")
+    assert summary(ev_session, "ev", "event")["next"] is None  # no follow-up nudge for events
+    core.log_stage(ev_session, "ev", "rejected", on=days(-30), kind="event")
+    assert summary(ev_session, "ev", "event")["stage_label"] == "Not selected"
+
+
+def test_events_stay_out_of_job_stats_and_use_no_default_cv(ev_session):
+    core.log_stage(ev_session, "ev", "applied", on=days(-2), kind="event")
+    ev_session.commit()
+    assert stats.application_stats(ev_session)["n"] == 0 and stats.outreach_stats(ev_session)["n"] == 1
+    library.create_custom(ev_session, "Thesis", "thesis", markdown="## Summary\n\nt")
+    assert library.cv_for_job(ev_session, ev_session.get(Job, "ev")) is None

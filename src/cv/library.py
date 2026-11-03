@@ -220,6 +220,8 @@ def cv_for_job(session: Session, job: Job) -> CVVersion | None:
             return cv
     if job.kind == "outreach":
         return default_thesis_cv(session)
+    if job.kind == "event":  # only the CV I pick (an event that asks for one)
+        return None
     a = primary_archetype(session, job.id)
     if a is None:
         return None

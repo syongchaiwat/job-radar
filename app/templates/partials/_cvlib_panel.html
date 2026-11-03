@@ -1,6 +1,6 @@
 {# Job page CV: pick a CV (this job's last saved copy, or a library CV by archetype + version),
    preview it before switching, and edit a copy for this job only. #}
-{% set sent_md = edited_cv.markdown if edited_cv else job_cv_markdown %}{% set what = 'lab' if job.kind == 'outreach' else 'job' %}
+{% set sent_md = edited_cv.markdown if edited_cv else job_cv_markdown %}{% set what = {'outreach': 'lab', 'event': 'event'}.get(job.kind, 'job') %}
 <div id="cv-library" x-data='cvPanel({{ cv_picker | tojson }})' class="border {% if edited_cv or job_cv %}border-accent/40{% else %}border-gray-800{% endif %} rounded-lg p-4 space-y-3">
   <div class="flex flex-wrap items-center gap-2">
     <p class="text-xs uppercase tracking-wide text-gray-500 mr-2">CV in use</p>
@@ -16,6 +16,8 @@
     {% elif what == 'lab' %}
     <span class="text-sm text-gray-400">No Thesis CV yet.</span>
     <a href="/cvs/new" class="text-sm text-accent hover:underline">Create one in the CV library</a>
+    {% elif what == 'event' %}
+    <span class="text-sm text-gray-500">No CV chosen. Only needed if the event asks for one: pick it below.</span>
     {% elif job_archetype %}
     <span class="text-sm text-gray-400">No CV for {{ job_archetype.name }} yet.</span>
     <a href="/cvs/{{ job_archetype.id }}" class="text-sm text-accent hover:underline">Generate it in the CV library</a>

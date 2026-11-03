@@ -72,6 +72,27 @@ def save_lab(job_id: str, session: Session = Depends(get_session), company: str 
     return RedirectResponse(f"/jobs/{job_id}", status_code=303)
 
 
+@router.post("/jobs/{job_id}/event")
+def save_event(job_id: str, session: Session = Depends(get_session), company: str = Form(...), title: str = Form(...),
+               event_date: str = Form(""), event_time: str = Form(""), location: str = Form(""), deadline: str = Form("")):
+    """Event entry: name, host, date and time, place, registration deadline (job page Event panel).
+    A scheduled Event entry that hasn't happened yet moves with the new date."""
+    job = session.get(Job, job_id)
+    if job is None or job.kind != "event":
+        raise HTTPException(status_code=404, detail="Event not found")
+    job.company, job.title = company.strip() or job.company, title.strip() or job.title
+    job.event_date, job.event_time = event_date or None, event_time or None
+    job.location, job.deadline = location.strip() or None, deadline or None
+    session.add(job)
+    upcoming = [e for e in tracking_core.events_for(session, job_id) if e.stage == "interview" and e.date > tracking_core.today()]
+    if upcoming and job.event_date:
+        ev = upcoming[-1]
+        tracking_core.update_event(session, ev, on=job.event_date, time=job.event_time, detail=tracking_core.detail_of(ev),
+                                   note=ev.note, debrief=ev.debrief, questions=ev.questions)
+    session.commit()
+    return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+
+
 @router.post("/jobs/{job_id}/description")
 def replace_description(job_id: str, session: Session = Depends(get_session), description: str = Form(...)):
     """Swap in a pasted description (e.g. auto-fetch saved page chrome instead of
@@ -88,7 +109,7 @@ def replace_description(job_id: str, session: Session = Depends(get_session), de
     job.description_breakdown = None  # cached breakdown was computed from the old text
     job.description_breakdown_computed_at = None
     session.commit()
-    if job.kind == "outreach":  # labs are never screened
+    if job.kind != "job":  # labs and events are never screened
         return RedirectResponse(f"/jobs/{job_id}", status_code=303)
     error = enrich_and_match(session, job, force=True)  # the role card must follow the new text
     session.add(screen_job(job, archetype_text(session, job.id)))

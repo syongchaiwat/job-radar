@@ -36,7 +36,10 @@ class Job(SQLModel, table=True):
     cv_version_id: Optional[int] = None  # CV library choice for this job; None = latest CV of its archetype
     market_data: bool = False  # user switch: this posting shapes archetypes and market stats (independent of application status)
     bookmarked: bool = False  # user marker to spot a job on the board
-    kind: str = "job"  # job (a posting) | outreach (a university lab I contact about a thesis: no screening, archetypes or market)
+    kind: str = "job"  # job (a posting) | outreach (a university lab I contact about a thesis) | event (career fair, workshop,
+    # info session). Only jobs get screening, archetypes, lanes and market stats.
+    event_date: Optional[str] = None  # events: ISO date of the event itself
+    event_time: Optional[str] = None  # events: HH:MM start
 
 
 class GroundTruth(SQLModel, table=True):
@@ -356,6 +359,8 @@ _ADDED_COLUMNS = {
         "lane_source": "VARCHAR",
         "deadline": "VARCHAR",
         "kind": "VARCHAR NOT NULL DEFAULT 'job'",
+        "event_date": "VARCHAR",
+        "event_time": "VARCHAR",
     },
     "tracking": {
         "channel": "VARCHAR",

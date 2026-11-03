@@ -80,6 +80,16 @@ class ExtractedLabPage(BaseModel):
     description: str = Field(description="The lab's real content (research, projects, open thesis projects, how to apply), page chrome removed, close to verbatim.")
 
 
+class ExtractedEventPage(BaseModel):
+    event: str = Field(description="The event's name. Empty string if not determinable.")
+    host: str = Field(description="Organising company or organisation. Empty string if not stated.")
+    date: str = Field(description="Event date YYYY-MM-DD (first day if several). Empty string if not stated.")
+    time: str = Field(description="Start time HH:MM (24h). Empty string if not stated.")
+    location: str = Field(description="Venue and/or city, or 'Online'. Empty string if not stated.")
+    registration_deadline: str = Field(description="YYYY-MM-DD. Empty string if not stated.")
+    description: str = Field(description="The event's real content (agenda, audience, requirements, registration), page chrome removed, close to verbatim.")
+
+
 class JobBlurb(BaseModel):
     blurb: str = Field(
         description="One punchy sentence (~12-25 words) summarizing what this job actually is, for a card view."

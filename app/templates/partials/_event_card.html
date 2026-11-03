@@ -1,0 +1,37 @@
+{# Board card for an event (Events section): event, host, date and place, registration deadline, stage. #}
+{% set jid = row.job.id %}
+<a href="/jobs/{{ jid }}" x-show="isVisible('{{ jid }}')" :style="{ order: orderOf('{{ jid }}') }"
+   class="relative block border rounded-xl p-4 hover:border-gray-600 transition-colors bg-gray-900/60"
+   :class="[job('{{ jid }}').status === 'new' ? 'border-accent/40' : 'border-gray-800',
+            (job('{{ jid }}').status === 'skipped' || job('{{ jid }}').app.closed || attended(job('{{ jid }}'))) ? 'opacity-60' : '']">
+  <button type="button" @click.prevent.stop="toggleBookmark('{{ jid }}')"
+          :title="bookmarked('{{ jid }}') ? 'Remove bookmark' : 'Bookmark'"
+          :class="bookmarked('{{ jid }}') ? 'text-white' : 'text-gray-700 hover:text-gray-400'"
+          class="absolute -top-px right-3 transition-colors">
+    <svg width="20" height="26" viewBox="0 0 20 26" aria-hidden="true">
+      <path d="M1 0h18v25l-9-6.5L1 25z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"
+            :fill="bookmarked('{{ jid }}') ? 'currentColor' : 'none'"/>
+    </svg>
+  </button>
+  <p class="text-xs uppercase tracking-wide text-accent mb-2 pr-8">{{ row.job.company }}</p>
+  <h3 class="font-semibold text-lg leading-snug mb-2">{{ row.job.title }}</h3>
+  <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm mb-3">
+    <template x-if="eventDay(job('{{ jid }}'))">
+      <span class="label-mono text-xs bg-amber-500/10 text-amber-200 border border-amber-500/30 rounded-md px-2 py-0.5"
+            x-text="weekday(eventDay(job('{{ jid }}'))) + ' ' + fmtDay(eventDay(job('{{ jid }}'))) + (job('{{ jid }}').event_time ? ' · ' + job('{{ jid }}').event_time : '') + ' · ' + relDay(eventDay(job('{{ jid }}')))"></span>
+    </template>
+    <span x-show="!eventDay(job('{{ jid }}'))" class="label-mono text-xs text-gray-500">date not set</span>
+    {% if row.job.location %}<span class="text-gray-400 truncate">{{ row.job.location }}</span>{% endif %}
+  </p>
+  <p class="flex flex-wrap items-center gap-2 mb-3 label-mono text-xs">
+    <span class="border rounded-md px-2 py-0.5" :class="stageClass(job('{{ jid }}').app.status)" x-text="job('{{ jid }}').app.stage_label"></span>
+    <span x-show="job('{{ jid }}').app.stage_date" class="text-gray-400" x-text="(job('{{ jid }}').app.stage_estimated ? '≈ ' : '') + fmtDay(job('{{ jid }}').app.stage_date)"></span>
+    <span x-show="job('{{ jid }}').app.next && job('{{ jid }}').app.next.kind === 'debrief'" :class="nextClass(job('{{ jid }}').app.next)" class="truncate" x-text="'· ' + nextText(job('{{ jid }}').app.next)"></span>
+    <span x-show="!job('{{ jid }}').app.applied && job('{{ jid }}').deadline" class="text-amber-300" x-text="'register by ' + fmtDay(job('{{ jid }}').deadline)"></span>
+  </p>
+  <div class="flex items-center justify-between gap-2 text-xs text-gray-500">
+    <span>added {{ row.job.first_seen | relative_time }}</span>
+    <button type="button" @click.prevent.stop="logStage(job('{{ jid }}'))"
+            class="border border-gray-700 rounded-md px-2 py-0.5 text-gray-400 hover:text-gray-100 hover:border-gray-500" title="Log a step">+ Log</button>
+  </div>
+</a>

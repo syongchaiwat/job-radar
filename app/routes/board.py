@@ -13,7 +13,7 @@ from src.lanes.core import job_lanes, load_lanes
 from app.templating import templates
 from src.cv import library
 from src.db import Job
-from src.tracking.core import OUTREACH_LABELS
+from src.tracking.core import EVENT_LABELS, OUTREACH_LABELS
 from src.ingest.dedupe import is_duplicate, job_id as url_job_id
 from src.ingest.manual import build_job, create_manual_job
 from src.ingest.url_fetch import fetch_and_extract
@@ -33,10 +33,11 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
     for row in rows:
         job = row["job"]
         row["lane_name"] = lane_names.get(job.lane)
-        if job.kind == "outreach":  # no archetype, screening or ranking for labs
+        if job.kind != "job":  # no archetype, screening or ranking for labs and events
             row["archetype"], row["priority"], row["eligible"] = None, 0, None
             cv = library.cv_for_job(session, job)
-            row["cv_name"] = "Edited for this lab" if row["own_cv"] else (cv_names.get(cv.archetype_slug) if cv else None)
+            row["cv_name"] = (f"Edited for this {'lab' if job.kind == 'outreach' else 'event'}" if row["own_cv"]
+                              else (cv_names.get(cv.archetype_slug) if cv else None))
             continue
         primary = assignments.get(job.id, {}).get("primary")
         row["archetype"] = arch_name.get(primary.archetype_id) if primary else None
@@ -49,6 +50,8 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
             {
                 "job_id": row["job"].id,
                 "kind": row["job"].kind,
+                "event_date": row["job"].event_date,
+                "event_time": row["job"].event_time,
                 "cv_name": row.get("cv_name"),
                 "company": row["job"].company,
                 "title": row["job"].title,
@@ -85,6 +88,7 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
             "outcome": OUTCOME_STATUSES,
             "statusLabels": STATUS_LABELS,
             "outreachLabels": OUTREACH_LABELS,
+            "eventLabels": EVENT_LABELS,
         }
     )
 
@@ -99,6 +103,7 @@ def _render_board(request: Request, session: Session, add_form: dict | None = No
             "lane_pills": [(l.key, l.name) for l in job_lanes()],
             "add_form": add_form or {},
             "n_labs": sum(1 for r in rows if r["job"].kind == "outreach"),
+            "n_events": sum(1 for r in rows if r["job"].kind == "event"),
             "added": added,
             "added_row": next((r for r in rows if added and r["job"].id == added.id), None),
         },
@@ -134,6 +139,34 @@ def _add_lab(request: Request, session: Session, url: str, description: str, for
     return RedirectResponse(f"/?view=labs&added={job.id}", status_code=303)
 
 
+def _clean_iso(value: str | None, fmt: str) -> str | None:
+    from datetime import datetime
+
+    try:
+        return datetime.strptime((value or "").strip(), fmt).strftime(fmt)
+    except ValueError:
+        return None
+
+
+def _add_event(request: Request, session: Session, url: str, description: str, form: dict):
+    """Event entry (career fair, workshop, info session): fetch (or take the pasted text), extract the
+    event, host, date, time, place and registration deadline, insert. No screening; starts as New."""
+    from src.ingest.url_fetch import extract_event, fetch_event_page
+
+    ev = extract_event(description, pasted=True) if description else fetch_event_page(url)
+    if ev is None:
+        return _render_board(request, session, add_form={**form, "needs_description": True})
+    raw = build_job(url, description=ev["description"], title=ev.get("event") or "Event",
+                    company=ev.get("host") or "Unknown host", location=ev.get("location") or None)
+    job = create_manual_job(session, raw)
+    job.kind, job.lane = "event", None
+    job.event_date, job.event_time = _clean_iso(ev.get("date"), "%Y-%m-%d"), _clean_iso(ev.get("time"), "%H:%M")
+    job.deadline = _clean_iso(ev.get("registration_deadline"), "%Y-%m-%d")
+    session.add(job)
+    session.commit()
+    return RedirectResponse(f"/?view=events&added={job.id}", status_code=303)
+
+
 @router.post("/jobs/add")
 def add_job(
     request: Request,
@@ -156,6 +189,8 @@ def add_job(
 
     if kind == "outreach":
         return _add_lab(request, session, url, description, form)
+    if kind == "event":
+        return _add_event(request, session, url, description, form)
 
     title = company = location = None
     if not description:

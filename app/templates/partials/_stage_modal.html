@@ -1,5 +1,5 @@
 {# Shared Log stage form (board + job page). Opened with $dispatch('log-stage', {...}); see static/js/stages.js. #}
-<div x-data='stageModal({{ status_labels | tojson }}, {{ outreach_labels | tojson }})' @log-stage.window="show($event.detail)" @keydown.escape.window="open = false">
+<div x-data='stageModal({{ kind_labels | tojson }})' @log-stage.window="show($event.detail)" @keydown.escape.window="open = false">
   <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-4 bg-black/60 overflow-y-auto" @click.self="open = false">
     <form @submit.prevent="submit()" class="w-full max-w-lg bg-gray-900 border border-gray-700 rounded-xl shadow-2xl my-8">
       <div class="px-5 pt-5 pb-3 border-b border-gray-800">
@@ -9,7 +9,7 @@
       <div class="px-5 py-4 space-y-4 text-sm">
         <label x-show="!editing" class="block">
           <span class="text-xs uppercase tracking-wide text-gray-500">Stage</span>
-          <select x-ref="first" x-model="f.stage" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2">
+          <select x-ref="first" x-model="f.stage" @change="prefillEvent()" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2">
             <optgroup label="Suggested">
               <template x-for="s in suggested()" :key="'s-' + s"><option :value="s" x-text="labels[s]" :selected="s === f.stage"></option></template>
             </optgroup>
@@ -38,12 +38,12 @@
         </div>
 
         <label x-show="needsApplied()" class="block border border-amber-700/50 bg-amber-500/5 rounded-md p-3">
-          <span class="text-xs uppercase tracking-wide text-amber-300" x-text="outreach ? 'When did you send it?' : 'When did you apply?'">When did you apply?</span>
+          <span class="text-xs uppercase tracking-wide text-amber-300" x-text="outreach ? 'When did you send it?' : (isEvent ? 'When did you register?' : 'When did you apply?')">When did you apply?</span>
           <input type="date" x-model="f.applied_on" :placeholder="f.date" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2 [color-scheme:dark]">
           <span class="block text-xs text-gray-500 mt-1" x-text="'No ' + labels.applied + ' entry yet: one is added with this date (leave empty for the same date as above).'"></span>
         </label>
 
-        <template x-if="stage === 'interview' && !outreach">
+        <template x-if="stage === 'interview' && kind === 'job'">
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label class="block sm:col-span-2"><span class="text-xs uppercase tracking-wide text-gray-500">Type</span>
               <select x-model="f.kind" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2">

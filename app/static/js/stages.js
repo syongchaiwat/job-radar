@@ -16,6 +16,13 @@ const OUTREACH_GROUPS = [
   ["Outcome", ["rejected", "no_response", "withdrawn", "declined", "accepted"]],
 ];
 const OUTREACH_SCHEDULED = ["interview"];
+// Events (career fairs, workshops, info sessions): Registered, Confirmed, the Event itself.
+const EVENT_GROUPS = [
+  ["Before registering", ["shortlist", "skipped"]],
+  ["Event", ["applied", "screening", "interview"]],
+  ["Outcome", ["rejected", "no_response", "withdrawn", "closed"]],
+];
+const KIND_GROUPS = { job: STAGE_GROUPS, outreach: OUTREACH_GROUPS, event: EVENT_GROUPS };
 
 function isoDay(offset = 0) {
   const d = new Date();
@@ -23,13 +30,14 @@ function isoDay(offset = 0) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function stageModal(jobLabels, outreachLabels) {
+function stageModal(kindLabels) {
   return {
     open: false, saving: false, error: "", reopen: false,
-    jobLabels, outreachLabels, kind: "job",
+    kindLabels, kind: "job", eventDate: "", eventTime: "",
     get outreach() { return this.kind === "outreach"; },
-    get labels() { return this.outreach ? this.outreachLabels : this.jobLabels; },
-    get groups() { return this.outreach ? OUTREACH_GROUPS : STAGE_GROUPS; },
+    get isEvent() { return this.kind === "event"; },
+    get labels() { return this.kindLabels[this.kind] || this.kindLabels.job; },
+    get groups() { return KIND_GROUPS[this.kind] || STAGE_GROUPS; },
     jobId: null, company: "", title: "", eventId: null,
     app: { applied: false, closed: false, status: "new", events: [] },
     f: {},
@@ -37,6 +45,7 @@ function stageModal(jobLabels, outreachLabels) {
       this.jobId = detail.jobId; this.company = detail.company || ""; this.title = detail.title || "";
       this.app = detail.app || { applied: false, closed: false, status: "new", events: [] };
       this.kind = this.app.kind || "job";
+      this.eventDate = detail.eventDate || ""; this.eventTime = detail.eventTime || "";
       const ev = detail.event;
       this.eventId = ev ? ev.id : null;
       const d = (ev && ev.detail) || {};
@@ -47,12 +56,24 @@ function stageModal(jobLabels, outreachLabels) {
         due: d.due || "", submitted: d.submitted || "", rating: d.rating ? String(d.rating) : "", round: d.round ? String(d.round) : "",
         note: (ev && ev.note) || "", debrief: (ev && ev.debrief) || "", questions: (ev && ev.questions) || "",
       };
+      if (!ev) this.prefillEvent();
       this.error = ""; this.reopen = false; this.open = true;
       this.$nextTick(() => this.$refs.first && this.$refs.first.focus());
     },
     // Most likely next steps first, from where the application stands.
+    // Events: logging the Event itself starts on the event's own date and time.
+    prefillEvent() {
+      if (this.isEvent && this.f.stage === "interview" && this.eventDate) { this.f.date = this.eventDate; this.f.time = this.eventTime || ""; }
+    },
     suggested() {
       const a = this.app;
+      if (this.isEvent) {
+        if (!a.applied) return ["applied", "shortlist", "skipped"];
+        if (a.closed) return ["applied", "screening", "interview"];
+        if (a.reached >= 4) return ["interview", "withdrawn"];
+        if (a.reached === 2) return ["interview", "withdrawn"];
+        return ["screening", "interview", "rejected", "no_response", "withdrawn"];
+      }
       if (this.outreach) {
         if (!a.applied) return ["applied", "skipped"];
         if (a.closed) return ["screening", "interview", "offer"];
@@ -70,7 +91,7 @@ function stageModal(jobLabels, outreachLabels) {
     get editing() { return this.eventId !== null; },
     get stage() { return this.f.stage; },
     needsApplied() { return !this.editing && !this.app.applied && !TRIAGE.includes(this.stage) && this.stage !== "applied"; },
-    hasTime() { return (this.outreach ? OUTREACH_SCHEDULED : SCHEDULED).includes(this.stage); },
+    hasTime() { return (this.kind === "job" ? SCHEDULED : OUTREACH_SCHEDULED).includes(this.stage); },
     isPast() { return this.f.date && this.f.date <= isoDay(); },
     heading() {
       if (this.editing) return "Edit " + (this.labels[this.stage] || this.stage);

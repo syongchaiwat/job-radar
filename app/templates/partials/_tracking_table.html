@@ -2,21 +2,21 @@
    from jobs-data so sorting and logging a stage need no reload. Click a row to expand its timeline. #}
 <div x-show="view === 'table'" x-cloak class="bg-gray-900/50 border border-gray-800 rounded-xl overflow-hidden">
   <div class="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-gray-800">
-    <h2 class="text-lg font-semibold" x-text="section === 'labs' ? 'Lab outreach' : 'Application tracking'">Application tracking</h2>
+    <h2 class="text-lg font-semibold" x-text="{ labs: 'Lab outreach', events: 'Events' }[section] || 'Application tracking'">Application tracking</h2>
     <span class="label-mono text-xs bg-accent-dim/20 text-accent rounded-md px-2 py-0.5" x-text="visible.length + ' rows'"></span>
-    <span class="label-mono text-xs text-gray-500 ml-auto" x-text="'Sort: ' + (section === 'labs' ? labSorts[labSort] : sorts[sort])"></span>
+    <span class="label-mono text-xs text-gray-500 ml-auto" x-text="'Sort: ' + activeSortLabel"></span>
   </div>
   <div class="overflow-x-auto">
     <table class="w-full text-sm min-w-[980px]">
       <thead>
         <tr class="text-left border-b border-gray-800 bg-gray-950/40">
           <th class="w-10 px-3 py-3"></th>
-          <th class="px-3 py-3 text-xs uppercase tracking-wide font-medium text-gray-500" x-text="section === 'labs' ? 'Lab & topic' : 'Company & role'">Company &amp; role</th>
+          <th class="px-3 py-3 text-xs uppercase tracking-wide font-medium text-gray-500" x-text="{ labs: 'Lab & topic', events: 'Event & host' }[section] || 'Company & role'">Company &amp; role</th>
           <th class="px-3 py-3 text-xs uppercase tracking-wide font-medium text-gray-500">Stage</th>
-          <th class="px-3 py-3 text-xs uppercase tracking-wide font-medium text-gray-500" x-text="section === 'labs' ? 'Sent' : 'Applied'">Applied</th>
+          <th class="px-3 py-3 text-xs uppercase tracking-wide font-medium text-gray-500" x-text="{ labs: 'Sent', events: 'Event date' }[section] || 'Applied'">Applied</th>
           <th class="px-3 py-3 text-xs uppercase tracking-wide font-medium text-gray-500">Next</th>
           <th class="px-3 py-3 text-xs uppercase tracking-wide font-medium text-gray-500">Last activity</th>
-          <th class="px-3 py-3 text-xs uppercase tracking-wide font-medium text-gray-500" x-text="section === 'labs' ? 'CV' : 'Sent'">Sent</th>
+          <th class="px-3 py-3 text-xs uppercase tracking-wide font-medium text-gray-500" x-text="section === 'jobs' ? 'Sent' : 'CV'">Sent</th>
         </tr>
       </thead>
       <template x-for="j in sortedVisible" :key="j.job_id">
@@ -41,7 +41,8 @@
                   </p>
                   <a :href="'/jobs/' + j.job_id" @click.stop="if (selecting) $event.preventDefault()" class="font-display font-semibold text-[15px] text-gray-100 hover:text-accent" x-text="j.title"></a>
                   <p x-show="j.kind === 'outreach' && j.contact" class="text-xs text-gray-400 mt-0.5" x-text="j.contact"></p>
-                  <div x-show="j.kind !== 'outreach'" class="flex flex-wrap gap-1.5 mt-1.5 label-mono text-[11px]">
+                  <p x-show="j.kind === 'event' && j.location" class="text-xs text-gray-400 mt-0.5" x-text="j.location"></p>
+                  <div x-show="j.kind === 'job'" class="flex flex-wrap gap-1.5 mt-1.5 label-mono text-[11px]">
                     <span x-show="j.archetype_name" class="bg-gray-800 text-accent rounded px-1.5 py-0.5" x-text="j.archetype_name"></span>
                     <span x-show="j.lane_name" class="text-gray-400 px-1 py-0.5" x-text="j.lane_name"></span>
                   </div>
@@ -63,14 +64,22 @@
               </div>
             </td>
             <td class="px-3 py-4 label-mono text-xs tabular whitespace-nowrap">
-              <template x-if="j.app.applied_date">
+              <template x-if="j.kind === 'event'">
+                <div>
+                  <p x-show="eventDay(j)" class="text-gray-200" x-text="weekday(eventDay(j)) + ' ' + fmtDay(eventDay(j)) + (j.event_time ? ' ' + j.event_time : '')"></p>
+                  <p x-show="eventDay(j)" class="text-gray-500" x-text="relDay(eventDay(j))"></p>
+                  <p x-show="!eventDay(j)" class="text-gray-600">Not set</p>
+                  <p x-show="!j.app.applied && j.deadline" class="text-amber-300 mt-1" x-text="'Register by ' + fmtDay(j.deadline)"></p>
+                </div>
+              </template>
+              <template x-if="j.kind !== 'event' && j.app.applied_date">
                 <div>
                   <p class="text-gray-200" x-text="(j.app.applied_estimated ? '≈ ' : '') + fmtDay(j.app.applied_date)"></p>
                   <p class="text-gray-500" x-text="j.app.closed ? 'closed' : (j.status === 'applied' ? 'waiting ' : '') + (-daysBetween(j.app.applied_date)) + ' days'"></p>
                 </div>
               </template>
-              <p x-show="!j.app.applied_date" class="text-gray-600" x-text="j.kind === 'outreach' ? 'Not sent' : 'Not applied'"></p>
-              <p x-show="!j.app.applied && j.deadline" class="text-amber-300 mt-1" x-text="'Deadline ' + fmtDay(j.deadline)"></p>
+              <p x-show="j.kind !== 'event' && !j.app.applied_date" class="text-gray-600" x-text="j.kind === 'outreach' ? 'Not sent' : 'Not applied'"></p>
+              <p x-show="j.kind === 'job' && !j.app.applied && j.deadline" class="text-amber-300 mt-1" x-text="'Deadline ' + fmtDay(j.deadline)"></p>
             </td>
             <td class="px-3 py-4 text-xs max-w-[15rem]">
               <template x-if="j.app.next">
@@ -88,13 +97,14 @@
             <td class="px-3 py-4 text-xs whitespace-nowrap">
               <a x-show="j.sent_cv" :href="'/jobs/' + j.job_id + '/sent/cv.pdf'" @click.stop class="flex items-center gap-1.5 text-gray-300 hover:text-accent">
                 <svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M2 1h5l3 3v9H2z"/><path d="M7 1v3h3"/></svg>
-                <span x-text="j.kind === 'outreach' ? (j.cv_name || 'CV') : (j.sent_cv_edited ? 'CV (edited)' : 'CV (library)')"></span>
+                <span x-text="j.kind !== 'job' ? (j.cv_name || 'CV') : (j.sent_cv_edited ? 'CV (edited)' : 'CV (library)')"></span>
               </a>
               <a x-show="j.sent_letter" :href="'/jobs/' + j.job_id + '/sent/letter.pdf'" @click.stop class="flex items-center gap-1.5 text-gray-300 hover:text-accent mt-1">
                 <svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M1 3h10v8H1z"/><path d="m1 3 5 4 5-4"/></svg>
                 Letter
               </a>
-              <span x-show="j.app.applied && !j.sent_cv && !j.sent_letter" class="text-gray-600">not recorded</span>
+              <span x-show="j.kind !== 'event' && j.app.applied && !j.sent_cv && !j.sent_letter" class="text-gray-600">not recorded</span>
+              <span x-show="j.kind === 'event' && !j.sent_cv" class="text-gray-600">–</span>
               <span x-show="j.kind === 'outreach' && !j.app.applied" class="text-gray-500" x-text="j.cv_name ? 'will send: ' + j.cv_name : 'no Thesis CV yet'"></span>
             </td>
           </tr>
@@ -127,7 +137,7 @@
                   <p x-show="j.notes" class="text-gray-400 text-xs whitespace-pre-line" x-text="j.notes"></p>
                   <div class="flex gap-3 pt-1">
                     <button type="button" @click.stop="logStage(j)" class="bg-accent-soft text-accent-ink font-medium rounded-md px-3 py-1 text-xs hover:bg-accent">Log stage</button>
-                    <a :href="'/jobs/' + j.job_id + '#application'" class="text-xs text-accent hover:underline self-center" x-text="j.kind === 'outreach' ? 'Open lab page →' : 'Open job page →'"></a>
+                    <a :href="'/jobs/' + j.job_id + '#application'" class="text-xs text-accent hover:underline self-center" x-text="{ outreach: 'Open lab page →', event: 'Open event page →' }[j.kind] || 'Open job page →'"></a>
                   </div>
                 </div>
               </div>

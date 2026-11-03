@@ -9,6 +9,10 @@ Lab outreach entries (Job.kind == "outreach") use the same log with their own na
 Sent, Replied, Meeting, Topic offered, Agreed / Declined / No topic / No reply. "New" reads
 "To contact"; there is no Assessment, Shortlist or Position closed.
 
+Events (Job.kind == "event": career fairs, workshops, info sessions) use it too: Interested,
+Registered, Confirmed, Event (reads "Attended" once it's past); Not selected, No response,
+Didn't go, Registration closed. No Assessment or Offer, and no follow-up nudges.
+
 Tracking.status is a cache of the log (the latest event, an outcome always winning),
 so the board's filters and sorts never have to read the events. Only `log_stage`,
 `update_event` and `delete_event` change the log, and each re-syncs the cache.
@@ -60,9 +64,17 @@ OUTREACH_LABELS = {
 }
 OUTREACH_SCHEDULED = {"interview"}  # a reply is an email, a meeting has a time and a debrief
 
+EVENT_LABELS = {
+    "new": "New", "shortlist": "Interested", "skipped": "Skipped", "applied": "Registered", "screening": "Confirmed",
+    "interview": "Event", "rejected": "Not selected", "no_response": "No response", "withdrawn": "Didn't go",
+    "closed": "Registration closed",
+}
+EVENT_STEPPER = ["applied", "screening", "interview"]
+KIND_LABELS = {"job": STATUS_LABELS, "outreach": OUTREACH_LABELS, "event": EVENT_LABELS}
+
 
 def labels_for(kind: str = "job") -> dict[str, str]:
-    return OUTREACH_LABELS if kind == "outreach" else STATUS_LABELS
+    return KIND_LABELS.get(kind, STATUS_LABELS)
 
 
 def label(stage: str, kind: str = "job") -> str:
@@ -70,8 +82,8 @@ def label(stage: str, kind: str = "job") -> str:
 
 
 def is_scheduled(stage: str, kind: str = "job") -> bool:
-    if kind == "outreach":
-        return stage in OUTREACH_SCHEDULED
+    if kind in ("outreach", "event"):
+        return stage in OUTREACH_SCHEDULED  # the meeting / the event itself
     return STAGES[stage].scheduled if stage in STAGES else False
 
 INTERVIEW_KINDS = ["Recruiter screen", "Technical", "Case study", "Behavioural / hiring manager", "Final / onsite"]
@@ -266,6 +278,9 @@ def reset_triage(session: Session, job_id: str) -> None:
 def event_label(ev: StageEvent, kind: str = "job") -> str:
     d = detail_of(ev)
     name = label(ev.stage, kind)
+    if kind == "event" and ev.stage == "interview":
+        name = "Event" if ev.date > today() else "Attended"
+        return f"{name} {d['round']}" if (d.get("round") or 1) > 1 else name
     if ev.stage == "interview" and d.get("round"):
         name = f"{name} {d['round']}"
     return name
@@ -309,8 +324,11 @@ def next_action(events: list[StageEvent], kind: str = "job") -> dict | None:
     pending = [e for e in events if event_dict(e, kind)["needs_debrief"]]
     if pending:
         e = pending[-1]
-        return {"kind": "debrief", "label": f"How did {event_label(e, kind)} go?", "date": e.date, "event_id": e.id}
+        what = "the event" if kind == "event" else event_label(e, kind)
+        return {"kind": "debrief", "label": f"How did {what} go?", "date": e.date, "event_id": e.id}
     last = events[-1]
+    if kind == "event":  # nothing to chase after an event
+        return None
     if _days_since(last.date) >= FOLLOW_UP_DAYS and status in ("applied", "assessment", "screening", "interview"):
         return {"kind": "follow_up", "label": "Follow up?", "date": last.date, "days": _days_since(last.date)}
     return None
@@ -345,7 +363,8 @@ def summary(events: list[StageEvent], kind: str = "job") -> dict:
         # done: it happened; passed: skipped on the way to a later stage
         "stepper": [{"stage": s, "label": label(s, kind), "done": any(e.stage == s for e in events),
                      "passed": STAGES[s].rank <= reached,
-                     "date": next((e.date for e in events if e.stage == s), None)} for s in STEPPER],
+                     "date": next((e.date for e in events if e.stage == s), None)}
+                    for s in (EVENT_STEPPER if kind == "event" else STEPPER)],
         "next": next_action(events, kind),
         "events": [event_dict(e, kind) for e in events],
     }
